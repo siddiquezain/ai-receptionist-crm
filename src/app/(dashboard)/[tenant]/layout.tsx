@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { Sidebar } from "@/components/dashboard/sidebar";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -24,6 +25,19 @@ export default async function DashboardLayout({
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseAuthId: user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      memberships: {
+        select: {
+          role: true,
+          tenant: {
+            select: { id: true, name: true, slug: true, logo: true },
+          },
+        },
+      },
+    },
   });
 
   if (!dbUser) {
@@ -47,24 +61,34 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const membership = await prisma.tenantMember.findUnique({
-    where: { userId_tenantId: { userId: dbUser.id, tenantId: tenant.id } },
-    select: { role: true },
-  });
+  const membership = dbUser.memberships.find((m) => m.tenant.id === tenant.id);
 
   if (!membership) {
     redirect("/login");
   }
 
+  // All workspaces this user can switch to
+  const workspaces = dbUser.memberships.map((m) => ({
+    name: m.tenant.name,
+    slug: m.tenant.slug,
+    logo: m.tenant.logo,
+  }));
+
   return (
     <div className="flex h-screen bg-[var(--bg)]">
-      <aside className="w-56 shrink-0 border-r border-[var(--border)] bg-[var(--surface)]">
-        <div className="p-4">
-          <p className="text-xs text-[var(--text-muted)] font-mono">
-            {tenant.name}
-          </p>
-        </div>
-      </aside>
+      <Sidebar
+        tenant={{
+          name: tenant.name,
+          slug: tenant.slug,
+          logo: tenant.logo,
+          plan: tenant.plan,
+        }}
+        user={{
+          name: dbUser.name,
+          email: dbUser.email,
+        }}
+        workspaces={workspaces}
+      />
       <main className="flex-1 overflow-y-auto">
         {children}
       </main>
