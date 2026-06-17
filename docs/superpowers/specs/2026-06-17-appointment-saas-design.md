@@ -218,10 +218,12 @@ model Tenant {
   slug           String         @unique
   logo           String?
   plan           Plan           @default(STARTER)
+  timezone       String         @default("UTC")   // IANA timezone string
   parentTenantId String?
   parent         Tenant?        @relation("AgencyClients", fields: [parentTenantId], references: [id])
   children       Tenant[]       @relation("AgencyClients")
   createdAt      DateTime       @default(now())
+  deletedAt      DateTime?
   members        TenantMember[]
   services       Service[]
   appointments   Appointment[]
@@ -244,7 +246,7 @@ model TenantMember {
   @@unique([userId, tenantId])
 }
 
-enum Role  { OWNER ADMIN MEMBER }
+enum Role  { OWNER ADMIN MANAGER STAFF VIEWER }
 enum Plan  { STARTER PRO ENTERPRISE }
 ```
 
@@ -261,7 +263,10 @@ model Service {
   price        Decimal?
   currency     String              @default("USD")
   isActive     Boolean             @default(true)
+  maxPerDay    Int?                // null = unlimited
+  maxPerSlot   Int?                // null = 1 (single booking per slot)
   createdAt    DateTime            @default(now())
+  deletedAt    DateTime?
   tenant       Tenant              @relation(fields: [tenantId], references: [id])
   appointments Appointment[]
   teamMembers  TeamMemberService[]
@@ -311,8 +316,8 @@ model Appointment {
   serviceId          String
   teamMemberId       String?
   conversationId     String?
-  startAt            DateTime
-  endAt              DateTime
+  startAt            DateTime          // stored in UTC
+  endAt              DateTime          // stored in UTC
   status             AppointmentStatus @default(PENDING)
   notes              String?
   bookedVia          BookingChannel    @default(AI)
@@ -320,6 +325,7 @@ model Appointment {
   cancelledAt        DateTime?
   cancellationReason String?
   createdAt          DateTime          @default(now())
+  deletedAt          DateTime?
   tenant             Tenant            @relation(fields: [tenantId], references: [id])
   customer           Customer          @relation(fields: [customerId], references: [id])
   service            Service           @relation(fields: [serviceId], references: [id])
@@ -346,6 +352,7 @@ model Customer {
   source        String?
   createdAt     DateTime       @default(now())
   lastSeenAt    DateTime?
+  deletedAt     DateTime?
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   appointments  Appointment[]
   conversations Conversation[]
@@ -358,22 +365,28 @@ model Customer {
 
 ```prisma
 model Conversation {
-  id           String              @id @default(cuid())
-  tenantId     String
-  customerId   String?
-  channel      ConversationChannel
-  externalId   String?
-  status       ConversationStatus  @default(OPEN)
-  assignedToId String?
-  aiHandled    Boolean             @default(true)
-  summary      String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  tenant       Tenant              @relation(fields: [tenantId], references: [id])
-  customer     Customer?           @relation(fields: [customerId], references: [id])
-  assignedTo   TeamMember?         @relation(fields: [assignedToId], references: [id])
-  messages     Message[]
-  appointments Appointment[]
+  id               String              @id @default(cuid())
+  tenantId         String
+  customerId       String?
+  channel          ConversationChannel
+  externalId       String?
+  status           ConversationStatus  @default(OPEN)
+  assignedToId     String?
+  aiHandled        Boolean             @default(true)
+  summary          String?
+  tags             String[]
+  extractedContext Json?               // { customerName, service, preferredTime }
+  memoryVersion    Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  customer         Customer?           @relation(fields: [customerId], references: [id])
+  assignedTo       TeamMember?         @relation(fields: [assignedToId], references: [id])
+  messages         Message[]
+  appointments     Appointment[]
+  notes            ConversationNote[]
+  attachments      Attachment[]
 }
 
 model Message {
@@ -397,22 +410,26 @@ enum MessageRole         { USER ASSISTANT SYSTEM }
 
 ```prisma
 model TeamMember {
-  id            String              @id @default(cuid())
-  tenantId      String
-  userId        String?
-  name          String
-  email         String
-  role          String?
-  avatarUrl     String?
-  isActive      Boolean             @default(true)
-  inviteToken   String?             @unique
-  createdAt     DateTime            @default(now())
-  tenant        Tenant              @relation(fields: [tenantId], references: [id])
-  services      TeamMemberService[]
-  appointments  Appointment[]
-  workingHours  WorkingHours[]
-  busyPeriods   BusyPeriod[]
-  conversations Conversation[]
+  id                    String              @id @default(cuid())
+  tenantId              String
+  userId                String?
+  name                  String
+  email                 String
+  role                  String?
+  avatarUrl             String?
+  isActive              Boolean             @default(true)
+  maxAppointmentsPerDay Int?
+  inviteToken           String?             @unique
+  createdAt             DateTime            @default(now())
+  deletedAt             DateTime?
+  tenant                Tenant              @relation(fields: [tenantId], references: [id])
+  services              TeamMemberService[]
+  appointments          Appointment[]
+  workingHours          WorkingHours[]
+  busyPeriods           BusyPeriod[]
+  conversations         Conversation[]
+  conversationNotes     ConversationNote[]
+  calendarIntegrations  CalendarIntegration[]
 }
 
 model TeamMemberService {
@@ -633,3 +650,824 @@ Both channels are scoped to `tenantId`. No cross-tenant event leakage.
 | `Message` stores `tokensUsed` + `model` | Per-tenant AI usage analytics without a separate logging service. |
 | `BookingChannel` enum on `Appointment` | Analytics can answer: how many bookings came from AI vs. manual vs. self-service? |
 | No billing in MVP | Clean scope boundary. Stripe Billing is an additive feature, not structural. |
+
+---
+
+## 12. Multi-Tenancy — Extended
+
+### Soft Delete
+
+All user-facing entities carry a `deletedAt DateTime?` field. A `null` value means active; a non-null value means logically deleted. Application queries always filter `deletedAt IS NULL` by default. Hard deletes are never performed by the application — only by an offline data retention job run by the platform operator.
+
+Models that require soft delete: `Tenant`, `Customer`, `Appointment`, `Conversation`, `TeamMember`, `Service`.
+
+Prisma middleware enforces the default filter globally so no individual query needs to remember it:
+
+```typescript
+// lib/prisma.ts — soft delete middleware
+prisma.$use(async (params, next) => {
+  const softDeleteModels = ['Customer','Appointment','Conversation','TeamMember','Service']
+  if (softDeleteModels.includes(params.model ?? '')) {
+    if (params.action === 'findUnique' || params.action === 'findFirst') {
+      params.action = 'findFirst'
+      params.args.where = { ...params.args.where, deletedAt: null }
+    }
+    if (params.action === 'findMany') {
+      params.args ??= {}
+      params.args.where = { ...params.args.where, deletedAt: null }
+    }
+  }
+  return next(params)
+})
+```
+
+### Audit Log
+
+Every write operation that mutates user-owned data is recorded in an `AuditLog` table.
+
+```prisma
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  actorId    String?            // userId — null if system/AI action
+  actorType  AuditActorType     // USER | SYSTEM | AI
+  action     String             // "appointment.confirmed", "customer.deleted", etc.
+  resource   String             // model name: "Appointment"
+  resourceId String             // the affected record's id
+  changes    Json?              // { before: {...}, after: {...} }
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, resource, resourceId])
+}
+
+enum AuditActorType { USER SYSTEM AI }
+```
+
+Audit writes are fire-and-forget (non-blocking). They must never fail a business transaction. Implementation: write to audit log in a `try/catch` that swallows errors and logs to the platform error tracker.
+
+### Row-Level Security Strategy
+
+Every table that carries `tenantId` gets the following RLS pattern applied in a raw Supabase migration:
+
+```sql
+-- Enable RLS
+ALTER TABLE "Appointment" ENABLE ROW LEVEL SECURITY;
+
+-- Authenticated users can only see rows for their current tenant
+CREATE POLICY "tenant_isolation" ON "Appointment"
+  USING (
+    "tenantId" = current_setting('app.current_tenant_id', true)::text
+  );
+```
+
+The `app.current_tenant_id` session variable is set by the application at the start of each database transaction via a Prisma middleware:
+
+```typescript
+// Set tenant context before every query
+await prisma.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`
+```
+
+The platform's service-role key (used only for admin operations) bypasses RLS. It is never exposed to the frontend or passed through user-facing API routes.
+
+### Workspace Switching
+
+A `User` can belong to multiple tenants via `TenantMember`. The current active tenant is stored in a `Set-Cookie` (httpOnly, SameSite=Lax) called `active_tenant`. Switching workspaces:
+
+1. User clicks workspace switcher in the sidebar
+2. POST `/api/auth/switch-tenant` with `{ tenantId }`
+3. Server verifies membership, sets `active_tenant` cookie
+4. Redirect to `/{new-tenant-slug}/dashboard`
+
+No re-authentication needed. The Supabase session remains unchanged.
+
+---
+
+## 13. RBAC & Permissions
+
+### Roles
+
+The `Role` enum is expanded from 3 to 5 roles to support real team structures:
+
+```prisma
+enum Role {
+  OWNER    // Full control. Can delete workspace. One per tenant.
+  ADMIN    // Full control except delete workspace. Manages team, billing.
+  MANAGER  // Manages appointments, customers, team schedules. Cannot touch AI/billing settings.
+  STAFF    // Manages own appointments and schedule only.
+  VIEWER   // Read-only access to dashboard and analytics.
+}
+```
+
+### Permission Matrix
+
+| Feature | OWNER | ADMIN | MANAGER | STAFF | VIEWER |
+|---|:---:|:---:|:---:|:---:|:---:|
+| View dashboard | ✓ | ✓ | ✓ | ✓ | ✓ |
+| View analytics | ✓ | ✓ | ✓ | ✗ | ✓ |
+| Manage appointments (all) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Manage own appointments | ✓ | ✓ | ✓ | ✓ | ✗ |
+| View customers | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Edit customers | ✓ | ✓ | ✓ | ✗ | ✗ |
+| View inbox | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Send messages / takeover | ✓ | ✓ | ✓ | ✓ | ✗ |
+| Manage team members | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Manage working hours | ✓ | ✓ | ✓ | own only | ✗ |
+| Manage services | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Configure AI settings | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Manage integrations | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Manage webhooks | ✓ | ✓ | ✗ | ✗ | ✗ |
+| View billing / usage | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Edit profile / branding | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Delete workspace | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Manage sub-businesses (agency) | ✓ | ✓ | ✗ | ✗ | ✗ |
+
+Permission checks live in `lib/permissions.ts`. Server Components and Route Handlers call `requirePermission(tenantMember, 'appointments.manage')` — a single function that throws a 403 if the role lacks the permission. Never check roles inline in components.
+
+### Feature Flags & Subscription Entitlements
+
+Feature flags are separate from billing. This allows the platform operator to enable beta features per-tenant regardless of plan, and to override entitlements for enterprise deals.
+
+```prisma
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique    // "ai_byok", "calendar_sync", "webhooks"
+  description String
+  enabledFor  Plan[]              // plans where this is on by default
+  createdAt   DateTime @default(now())
+}
+
+model EntitlementOverride {
+  id        String   @id @default(cuid())
+  tenantId  String
+  flagKey   String               // references FeatureFlag.key
+  enabled   Boolean
+  reason    String?              // "enterprise deal", "beta tester"
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, flagKey])
+}
+```
+
+Entitlement resolution at runtime:
+
+```typescript
+// lib/entitlements.ts
+export async function hasFeature(tenantId: string, plan: Plan, flagKey: string): Promise<boolean> {
+  // 1. Check EntitlementOverride — highest priority
+  const override = await prisma.entitlementOverride.findUnique({
+    where: { tenantId_flagKey: { tenantId, flagKey } }
+  })
+  if (override && (!override.expiresAt || override.expiresAt > new Date())) {
+    return override.enabled
+  }
+  // 2. Fall back to plan-level default from FeatureFlag
+  const flag = await prisma.featureFlag.findUnique({ where: { key: flagKey } })
+  return flag?.enabledFor.includes(plan) ?? false
+}
+```
+
+---
+
+## 14. Scheduling Engine
+
+### Timezone Strategy
+
+**Rule: all `DateTime` values are stored in UTC. All display is in the tenant's configured timezone.**
+
+- `Tenant.timezone` stores an IANA timezone string (e.g., `"America/New_York"`).
+- `WorkingHours.startTime` / `endTime` store wall-clock strings (`"09:00"`), which are interpreted in the tenant's timezone when computing availability windows.
+- Slot availability computation converts everything to UTC before comparison. The AI and booking page always work in UTC internally.
+- The frontend uses `Intl.DateTimeFormat` with the tenant timezone for all display. Never store display-local times.
+
+```prisma
+// Add to Tenant model
+timezone  String  @default("UTC")   // IANA timezone string
+```
+
+### Availability Algorithm
+
+When computing available slots for a given service + staff member + date:
+
+```
+1. Load WorkingHours for (tenantId, teamMemberId OR business-level, dayOfWeek)
+   → Convert startTime/endTime to UTC DateTime for the requested date using tenant timezone
+2. Load BusyPeriods overlapping the requested date (including expanded recurring rules via rrule.js)
+3. Load existing Appointments for the staff member on that date (status ≠ CANCELLED)
+   → Each appointment blocks [startAt, endAt + bufferTime]
+4. Subtract busy periods and booked slots from working hours window
+5. Divide remaining time into slots of service.duration minutes
+6. Return slots as UTC DateTime pairs
+```
+
+### Double-Booking Prevention
+
+Optimistic locking is insufficient for concurrent booking. Prevention is enforced at the database level with a **serializable transaction + conflict check**:
+
+```typescript
+// lib/scheduling/book.ts
+await prisma.$transaction(async (tx) => {
+  // 1. Re-check availability inside the transaction
+  const conflict = await tx.appointment.findFirst({
+    where: {
+      tenantId,
+      teamMemberId,
+      status: { notIn: ['CANCELLED'] },
+      OR: [
+        { startAt: { lt: endAt }, endAt: { gt: startAt } }  // overlap check
+      ]
+    }
+  })
+  if (conflict) throw new BookingConflictError()
+
+  // 2. Create appointment — if another request races here, the conflict check catches it
+  return tx.appointment.create({ data: { ... } })
+}, { isolationLevel: 'Serializable' })
+```
+
+A unique partial index on `(tenantId, teamMemberId, startAt)` where `status NOT IN ('CANCELLED')` provides an additional DB-level guard.
+
+### Appointment Limits
+
+```prisma
+// Add to Service model
+maxPerDay      Int?    // null = unlimited per day
+maxPerSlot     Int?    // concurrent bookings per time slot (e.g. group classes)
+
+// Add to TeamMember model
+maxAppointmentsPerDay Int?   // null = unlimited
+```
+
+When `maxPerDay` is set, the availability algorithm checks today's confirmed appointment count for that service before returning slots.
+
+### Google Calendar Integration
+
+```prisma
+model CalendarIntegration {
+  id              String   @id @default(cuid())
+  tenantId        String
+  teamMemberId    String?              // null = business-level
+  provider        CalendarProvider     // GOOGLE | OUTLOOK
+  accessToken     String               // AES-256 encrypted
+  refreshToken    String               // AES-256 encrypted
+  tokenExpiresAt  DateTime
+  calendarId      String               // Google/Outlook calendar ID to sync
+  syncDirection   SyncDirection        // READ_ONLY | WRITE_ONLY | BIDIRECTIONAL
+  lastSyncedAt    DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant              @relation(fields: [tenantId], references: [id])
+  teamMember      TeamMember?         @relation(fields: [teamMemberId], references: [id])
+}
+
+enum CalendarProvider { GOOGLE OUTLOOK }
+enum SyncDirection    { READ_ONLY WRITE_ONLY BIDIRECTIONAL }
+```
+
+**Sync strategy:**
+- `READ_ONLY`: External calendar events are pulled as `BusyPeriod` records. The platform's built-in calendar remains the source of truth for bookings.
+- `WRITE_ONLY`: New appointments confirmed on the platform are pushed to the external calendar.
+- `BIDIRECTIONAL`: Both. Conflicts resolved by timestamp — most recent write wins.
+
+A background job runs every 15 minutes to pull external calendar changes. Webhook subscriptions (Google Push Notifications, Outlook webhooks) are used when available to get near-realtime updates.
+
+### Holidays & Business Closures
+
+Business closures and holidays are modeled as `BusyPeriod` records with `teamMemberId = null` (business-level). Examples:
+
+- Single-day closure: one `BusyPeriod` with `isRecurring = false`
+- Annual holiday (e.g., Christmas): `isRecurring = true`, `recurrenceRule = "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25"`
+- Summer vacation: one `BusyPeriod` block spanning the date range
+
+The availability algorithm always checks business-level busy periods before computing staff-level slots.
+
+---
+
+## 15. AI Layer — Extended
+
+### Conversation Memory Strategy
+
+The AI receptionist maintains context within a conversation using a **rolling window + compression** approach:
+
+1. **Rolling window:** The last N messages (default 20) are always sent as full context.
+2. **Summary compression:** When a conversation exceeds 20 messages, the oldest messages beyond the window are compressed by the AI into a `summary` string stored on the `Conversation` record. Subsequent requests prepend the summary as a SYSTEM message.
+3. **Structured memory:** Key extracted facts (customer name, requested service, preferred time, last appointment) are stored in `Conversation.extractedContext` as JSON, injected as a compact SYSTEM message on every request.
+
+```prisma
+// Add to Conversation model
+extractedContext Json?    // { customerName, service, preferredTime, notes }
+memoryVersion    Int      @default(0)   // incremented each time summary is regenerated
+```
+
+### AI Prompt Versioning
+
+System prompts are versioned so changes can be rolled back and A/B tested without touching code.
+
+```prisma
+model AIPromptVersion {
+  id           String   @id @default(cuid())
+  tenantId     String
+  version      Int
+  systemPrompt String
+  changelog    String?
+  isActive     Boolean  @default(false)   // only one active per tenant
+  activatedAt  DateTime?
+  createdAt    DateTime @default(now())
+  createdById  String?
+
+  @@unique([tenantId, version])
+  @@index([tenantId, isActive])
+}
+```
+
+When `AISettings.systemPrompt` is null, the platform falls back to the tenant's active `AIPromptVersion`. When neither exists, a platform-level default prompt is used.
+
+### AI Usage Tracking
+
+Every AI call produces a `AIUsageRecord`. This is the source of truth for usage-based billing, analytics, and BYOK cost monitoring.
+
+```prisma
+model AIUsageRecord {
+  id               String   @id @default(cuid())
+  tenantId         String
+  conversationId   String?
+  messageId        String?
+  provider         String   // "openai" | "anthropic" | "gemini" | "grok"
+  model            String   // "gpt-4o" | "claude-3-5-sonnet" etc.
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  estimatedCostUsd Decimal  // calculated at write time using provider pricing table
+  isByok           Boolean  @default(false)   // was this a BYOK call?
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+```
+
+The `estimatedCostUsd` is computed from a static pricing table in `lib/ai/pricing.ts`. Actual billed cost may differ (Supabase batches API calls); this is an estimate for the usage dashboard.
+
+---
+
+## 16. Conversations — Extended Schema
+
+### Internal Notes
+
+Staff can leave internal notes on a conversation that are never shown to the customer.
+
+```prisma
+model ConversationNote {
+  id             String       @id @default(cuid())
+  conversationId String
+  authorId       String       // TeamMember.id
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  author         TeamMember   @relation(fields: [authorId], references: [id])
+}
+```
+
+### Conversation Tags
+
+```prisma
+// Add to Conversation model
+tags  String[]   // e.g. ["urgent", "VIP", "billing-issue"]
+```
+
+Tags on `Conversation` are separate from tags on `Customer`. Conversation tags describe the nature of the interaction; customer tags describe the person.
+
+### Attachments
+
+Customers and staff can send file attachments in conversations. Files are stored in Supabase Storage, never in the database. The `Attachment` model stores a reference.
+
+```prisma
+model Attachment {
+  id             String         @id @default(cuid())
+  tenantId       String
+  messageId      String?
+  conversationId String?
+  uploadedById   String?        // TeamMember.id if staff, null if customer
+  storageKey     String         // Supabase Storage object path
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  createdAt      DateTime       @default(now())
+
+  message        Message?       @relation(fields: [messageId], references: [id])
+  conversation   Conversation?  @relation(fields: [conversationId], references: [id])
+}
+```
+
+**File upload security:**
+- Uploads go through a server-side Route Handler (`/api/upload`), never directly to Supabase Storage from the browser with service-role credentials.
+- The handler validates: file size (max 10 MB), MIME type allowlist (`image/*`, `application/pdf`, `text/plain`), and virus scanning flag (Supabase Storage can be configured with a ClamAV integration).
+- Supabase Storage bucket policy: private by default. Files are served via signed URLs with a 1-hour TTL, generated on demand by the server.
+
+---
+
+## 17. Analytics Architecture
+
+### Event-Driven Model
+
+Analytics are built on an append-only `AnalyticsEvent` table. Application code emits events on key actions. Reports are computed from events, not recalculated from live transactional tables.
+
+```prisma
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  event      String   // "appointment.booked", "conversation.started", "appointment.no_show"
+  properties Json     // event-specific payload
+  occurredAt DateTime @default(now())
+
+  @@index([tenantId, event, occurredAt])
+}
+```
+
+**Canonical event taxonomy:**
+
+| Event | Properties |
+|---|---|
+| `appointment.booked` | `{ appointmentId, serviceId, teamMemberId, bookedVia, customerId }` |
+| `appointment.confirmed` | `{ appointmentId }` |
+| `appointment.cancelled` | `{ appointmentId, reason }` |
+| `appointment.completed` | `{ appointmentId }` |
+| `appointment.no_show` | `{ appointmentId }` |
+| `conversation.started` | `{ conversationId, channel }` |
+| `conversation.escalated` | `{ conversationId, assignedToId }` |
+| `conversation.resolved` | `{ conversationId, aiHandled }` |
+| `ai.message_sent` | `{ conversationId, provider, model, tokens, costUsd }` |
+| `customer.created` | `{ customerId, source }` |
+| `booking_page.viewed` | `{ serviceId, source }` |
+
+### Daily Snapshots
+
+To avoid expensive full-table aggregations on large datasets, a background job runs nightly and materializes key metrics into a `DailySnapshot` table.
+
+```prisma
+model DailySnapshot {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  date                   DateTime // UTC midnight of the snapshot day
+  appointmentsBooked     Int
+  appointmentsConfirmed  Int
+  appointmentsCancelled  Int
+  appointmentsCompleted  Int
+  appointmentsNoShow     Int
+  conversationsStarted   Int
+  conversationsResolved  Int
+  conversationsEscalated Int
+  aiMessagesCount        Int
+  aiTokensUsed           Int
+  aiEstimatedCostUsd     Decimal
+  bookingConversionRate  Decimal  // conversations / bookings
+  newCustomersCount      Int
+  revenueUsd             Decimal
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+}
+```
+
+Analytics dashboard queries `DailySnapshot` for date-range aggregations. Raw `AnalyticsEvent` is queried only for drill-down detail views and CSV export.
+
+### KPI Definitions
+
+| KPI | Definition | Source |
+|---|---|---|
+| Appointments today | COUNT appointments WHERE date = today AND status ≠ CANCELLED | DailySnapshot |
+| Pending confirmations | COUNT appointments WHERE status = PENDING | Live query |
+| Open conversations | COUNT conversations WHERE status = OPEN | Live query |
+| Booking conversion rate | bookings ÷ conversations × 100 | DailySnapshot |
+| No-show rate | no_shows ÷ confirmed × 100 | DailySnapshot |
+| Avg. response time | AVG(first assistant message.createdAt - conversation.createdAt) | AnalyticsEvent |
+| AI handoff rate | escalated ÷ total conversations × 100 | DailySnapshot |
+| Revenue | SUM(appointment.service.price) WHERE status = COMPLETED | DailySnapshot |
+
+### Export Architecture
+
+Every analytics table and data grid exposes a `/export` endpoint that streams CSV. Implementation uses Node.js streams to avoid loading full datasets into memory:
+
+```typescript
+// Route: GET /api/[tenant]/analytics/appointments/export
+// Streams Prisma cursor query → CSV rows → Response
+```
+
+---
+
+## 18. Notifications & Background Jobs
+
+### Notification Model
+
+```prisma
+model NotificationJob {
+  id           String             @id @default(cuid())
+  tenantId     String
+  type         NotificationType
+  channel      NotificationChannel
+  recipient    String             // email address, phone number, or WhatsApp number
+  payload      Json               // template variables: { customerName, appointmentTime, ... }
+  status       JobStatus          @default(PENDING)
+  scheduledFor DateTime           // when to send
+  attempts     Int                @default(0)
+  lastAttemptAt DateTime?
+  failureReason String?
+  sentAt       DateTime?
+  createdAt    DateTime           @default(now())
+
+  @@index([status, scheduledFor])
+  @@index([tenantId, type])
+}
+
+enum NotificationType {
+  APPOINTMENT_CONFIRMATION
+  APPOINTMENT_REMINDER_24H
+  APPOINTMENT_REMINDER_1H
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  FOLLOW_UP
+  STAFF_NEW_BOOKING
+  STAFF_CANCELLATION
+}
+
+enum NotificationChannel { EMAIL WHATSAPP SMS IN_APP }
+enum JobStatus { PENDING PROCESSING SENT FAILED CANCELLED }
+```
+
+### Provider Abstraction
+
+Notification providers follow the same adapter pattern as AI providers. All code calls `lib/notifications/index.ts → sendNotification(job)`, which dispatches to the correct provider:
+
+```
+lib/notifications/
+  ├── index.ts           # sendNotification(job: NotificationJob): Promise<void>
+  ├── providers/
+  │   ├── email/
+  │   │   ├── resend.ts  # default email provider
+  │   │   └── sendgrid.ts
+  │   ├── whatsapp/
+  │   │   └── twilio.ts  # WhatsApp Business API via Twilio
+  │   └── sms/
+  │       └── twilio.ts
+  └── templates/         # Handlebars templates per NotificationType
+```
+
+### Retry Strategy
+
+The background job runner (implemented using `pg-boss` or a simple Supabase Edge Function cron) processes `NotificationJob` records:
+
+1. Fetch `PENDING` jobs where `scheduledFor <= now()`, lock row with `SELECT FOR UPDATE SKIP LOCKED`
+2. Set status to `PROCESSING`
+3. Call provider
+4. On success: set `status = SENT`, record `sentAt`
+5. On failure: increment `attempts`, set `status = FAILED` if `attempts >= 3`, otherwise reset to `PENDING` with `scheduledFor = now() + exponential_backoff(attempts)`
+
+Exponential backoff: 5 min → 30 min → 2 hours. After 3 failures, alert the platform error tracker and leave `status = FAILED`.
+
+---
+
+## 19. Security
+
+### Secret Encryption
+
+All secrets stored in the database (BYOK API keys, OAuth tokens) are encrypted using AES-256-GCM before write and decrypted after read. The encryption key is stored as an environment variable (`ENCRYPTION_KEY`), never in the database.
+
+```typescript
+// lib/crypto.ts
+export function encrypt(plaintext: string): string  // returns base64(iv + ciphertext + tag)
+export function decrypt(ciphertext: string): string
+```
+
+Prisma middleware intercepts writes/reads to `AISettings.byokApiKey` and `CalendarIntegration.accessToken` / `refreshToken` automatically.
+
+### Secret Rotation Strategy
+
+1. A new `ENCRYPTION_KEY_v2` environment variable is added.
+2. A migration script reads all encrypted secrets, decrypts with `v1`, re-encrypts with `v2`, writes back.
+3. `ENCRYPTION_KEY` is swapped for `v2` and `v1` is removed.
+4. The script runs in a maintenance window. It processes records in batches of 100 with a small sleep between batches to avoid locking.
+
+### Rate Limiting
+
+Rate limiting is applied at the middleware layer using a Redis-backed sliding window counter (Upstash Redis on Vercel Edge):
+
+| Endpoint | Limit |
+|---|---|
+| `POST /api/ai/chat` | 60 requests / minute per tenant |
+| `POST /api/auth/*` | 10 requests / minute per IP |
+| `POST /api/webhooks/whatsapp` | 200 requests / minute (Twilio sends batches) |
+| All other API routes | 200 requests / minute per tenant |
+
+On limit breach: return `429 Too Many Requests` with `Retry-After` header.
+
+### Input Validation
+
+All API route handlers validate input with Zod before touching the database. The same Zod schema is used client-side (React Hook Form) and server-side. No raw `req.body` is ever passed to Prisma.
+
+### Audit Log Coverage
+
+All writes to the following models generate an `AuditLog` entry: `Appointment`, `Customer`, `TeamMember`, `AISettings`, `WorkingHours`, `BusyPeriod`, `TenantMember`, `Tenant` (profile changes).
+
+### Content Security Policy
+
+Next.js `next.config.ts` sets strict CSP headers. No inline scripts. `script-src 'self'`. Supabase and AI provider domains are explicitly allowlisted.
+
+---
+
+## 20. Extensibility
+
+### Webhook Framework
+
+```prisma
+model Webhook {
+  id          String           @id @default(cuid())
+  tenantId    String
+  url         String
+  secret      String           // HMAC-SHA256 signing secret, shown once to user
+  events      String[]         // ["appointment.booked", "conversation.escalated"]
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+
+  deliveries  WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id           String          @id @default(cuid())
+  webhookId    String
+  event        String
+  payload      Json
+  statusCode   Int?
+  responseBody String?
+  duration     Int?            // ms
+  attempts     Int             @default(0)
+  status       JobStatus       @default(PENDING)
+  createdAt    DateTime        @default(now())
+
+  webhook      Webhook         @relation(fields: [webhookId], references: [id])
+}
+```
+
+Webhooks are fired as background jobs (same `NotificationJob` retry pattern). Each delivery is signed with `HMAC-SHA256(secret, JSON.stringify(payload))` and the signature is sent in `X-Signature-256` header so receivers can verify authenticity.
+
+### Public API Readiness
+
+The API is designed for versioning from day one:
+
+- All external-facing routes live under `/api/v1/`
+- Internal (dashboard) routes live under `/api/` without a version prefix
+- Route handlers return consistent response shapes:
+  ```typescript
+  { data: T, meta?: { page, total } }           // success
+  { error: { code: string, message: string } }  // failure
+  ```
+- API keys for public API access (future): `ApiKey` model with hashed key, scope, and rate limit tier. Never store the raw key — only `SHA256(key)`.
+
+### Integration Layer
+
+```
+lib/integrations/
+  ├── index.ts              # registry of available integrations
+  ├── google-calendar/
+  │   ├── auth.ts           # OAuth2 flow
+  │   ├── sync.ts           # pull/push logic
+  │   └── webhooks.ts       # Google push notification handler
+  ├── outlook/
+  │   └── ...
+  └── types.ts              # Integration interface
+```
+
+Each integration implements a common `Integration` interface:
+```typescript
+interface Integration {
+  connect(tenantId: string, code: string): Promise<void>
+  disconnect(tenantId: string): Promise<void>
+  sync(tenantId: string): Promise<SyncResult>
+}
+```
+
+---
+
+## 21. Billing Readiness
+
+### Usage Tracking (MVP)
+
+Billing is not implemented in MVP, but **usage is tracked from day one** so it can be wired to Stripe Billing later without a migration.
+
+```prisma
+model UsageRecord {
+  id         String      @id @default(cuid())
+  tenantId   String
+  metric     UsageMetric
+  quantity   Int
+  recordedAt DateTime    @default(now())
+  periodStart DateTime
+  periodEnd   DateTime
+
+  @@index([tenantId, metric, periodStart])
+}
+
+enum UsageMetric {
+  AI_MESSAGES      // count of AI messages sent
+  AI_TOKENS        // total tokens consumed
+  APPOINTMENTS     // total appointments booked
+  TEAM_MEMBERS     // active team member seats
+  CONVERSATIONS    // total conversations started
+}
+```
+
+A nightly job aggregates `AnalyticsEvent` and `AIUsageRecord` into `UsageRecord` per billing period. When Stripe is introduced, `UsageRecord` maps directly to Stripe Usage-Based Billing line items.
+
+### Subscription Model
+
+The `Plan` enum is the subscription tier. Plan-gated features use `hasFeature()` from the entitlements system, not inline `tenant.plan` checks. This means:
+
+- Adding a new plan never requires searching for `if plan === 'PRO'` strings in application code
+- Plan changes take effect immediately via the `EntitlementOverride` system without redeployment
+
+---
+
+## 22. Frontend Architecture
+
+### Component Hierarchy
+
+```
+app/(dashboard)/[tenant]/page.tsx        ← Server Component (data fetch)
+  └── DashboardShell                     ← Client boundary
+        ├── StatStrip                    ← reads from props (server-fetched)
+        │     └── StatCard × 4
+        ├── AppointmentTrendChart        ← TanStack Query (client)
+        ├── InboxSnapshot                ← TanStack Query (client)
+        ├── UpcomingAppointmentsTable    ← TanStack Query (client)
+        └── TodayTimeline               ← TanStack Query + Supabase Realtime
+```
+
+All shared primitives (`Button`, `Badge`, `Table`, `Dialog`, `Sheet`) come from shadcn/ui and are never modified directly — they are composed in `components/dashboard/` and `components/forms/`.
+
+### Loading, Empty, and Error States
+
+Every data-fetching component handles three states explicitly. No component renders `undefined` or throws during loading.
+
+| State | Pattern |
+|---|---|
+| **Loading** | Skeleton components that match the shape of the loaded content. No full-page spinners except for initial auth. |
+| **Empty** | Purposeful empty states with a headline, one-sentence description, and a single CTA ("Book your first appointment"). Never just a blank area. |
+| **Error** | Inline error with a retry button. Full-page error boundaries catch unhandled throws and show a recovery path. |
+
+Skeleton components are built as variants of the real components using `data-loading` attribute + Tailwind `animate-pulse`.
+
+### Responsive Breakpoints
+
+| Breakpoint | Width | Layout change |
+|---|---|---|
+| `sm` | 640px | Mobile: sidebar becomes bottom nav |
+| `md` | 768px | Tablet: sidebar becomes icon-only rail |
+| `lg` | 1024px | Desktop: full sidebar with labels |
+| `xl` | 1280px | Wide: right-rail panels appear |
+| `2xl` | 1536px | Ultra-wide: content max-width capped at 1400px |
+
+The dashboard shell uses CSS Grid with named areas. Sidebar, main content, and right rail are grid areas that collapse gracefully at each breakpoint.
+
+### Dark / Light Mode
+
+Implemented via `next-themes`. The `class` strategy is used (`dark` class on `<html>`). Design tokens in `globals.css` use CSS custom properties that switch based on the class:
+
+```css
+:root        { --bg: #fafafa; --surface: #ffffff; ... }
+.dark        { --bg: #0a0a0a; --surface: #111111; ... }
+```
+
+No Tailwind `dark:` utility classes in component JSX — all theming is done through CSS variables consumed by Tailwind via `@theme` in v4. This keeps components clean and makes the design tokens the single source of truth.
+
+### Accessibility
+
+- WCAG AA minimum contrast (4.5:1 for body, 3:1 for large text)
+- All interactive elements reachable by keyboard with visible focus ring
+- `aria-label` on all icon-only buttons
+- Dialogs trap focus and return focus on close
+- Tables use `<caption>` and `scope` attributes
+- Form inputs always paired with `<label>` — never `placeholder` as a label substitute
+- Color is never the sole indicator of status — badges always include text
+
+---
+
+## 23. Updated Key Decisions
+
+| Decision | Rationale |
+|---|---|
+| Soft delete on all entities | Preserves referential integrity and appointment history. Hard deletes only via operator tooling. |
+| AuditLog as fire-and-forget | Audit writes must never block or fail a business transaction. |
+| 5-role RBAC with permission matrix | Supports real team structures from day one without code changes as roles evolve. |
+| Entitlements independent of billing | Plan changes and enterprise overrides never require code changes or redeploys. |
+| All DateTimes stored in UTC | Eliminates an entire class of timezone bugs. Tenant timezone only used for display. |
+| Serializable transaction for booking | Database-enforced double-booking prevention, not application-level optimistic locking. |
+| DailySnapshot for analytics | Prevents full-table scans on large event tables. Dashboards are always fast. |
+| Event taxonomy documented upfront | Analytics are only as good as the events feeding them. Defining events before coding prevents gaps. |
+| Notification jobs with retry | Reminders are business-critical. A failed first attempt must not mean a missed reminder. |
+| Usage records from day one | Billing can be added without a data migration. Every metric that matters commercially is already tracked. |
+| Webhook HMAC signing | Receivers can verify authenticity without trusting the network. |
+| Versioned public API from day one | Prevents breaking changes from affecting integrations when the API evolves. |
