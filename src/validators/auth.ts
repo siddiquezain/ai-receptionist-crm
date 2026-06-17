@@ -3,11 +3,11 @@ import { z } from "zod";
 export const loginSchema = z.object({
   email: z
     .string()
-    .min(1, "Email is required")
+    .min(1, "Email is required") // fires before .email() to give "required" instead of "invalid" on empty input
     .email("Enter a valid email address"),
   password: z
     .string()
-    .min(1, "Password is required"),
+    .min(1, "Password is required"), // login doesn't re-enforce registration password policy
 });
 
 export const registerSchema = z.object({
@@ -17,12 +17,12 @@ export const registerSchema = z.object({
     .max(100, "Full name is too long"),
   email: z
     .string()
-    .min(1, "Email is required")
+    .min(1, "Email is required") // fires before .email() to give "required" instead of "invalid" on empty input
     .email("Enter a valid email address"),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
-    .max(72, "Password is too long"),
+    .max(72, "Password is too long"), // bcrypt silently truncates at 72 chars
   businessName: z
     .string()
     .min(2, "Business name must be at least 2 characters")
@@ -32,7 +32,7 @@ export const registerSchema = z.object({
 export const forgotPasswordSchema = z.object({
   email: z
     .string()
-    .min(1, "Email is required")
+    .min(1, "Email is required") // fires before .email() to give "required" instead of "invalid" on empty input
     .email("Enter a valid email address"),
 });
 
