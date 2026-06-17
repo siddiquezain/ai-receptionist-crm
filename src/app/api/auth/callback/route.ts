@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Login flow — user already has records
-  if (next.startsWith("/")) {
+  if (next.startsWith("/") && !next.startsWith("//")) {
     return NextResponse.redirect(`${origin}${next}`);
   }
   return NextResponse.redirect(origin);
