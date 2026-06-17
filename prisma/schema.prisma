@@ -1,13 +1,550 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
+// prisma/schema.prisma
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  STAFF
+  VIEWER
+}
+
+enum Plan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum BookingChannel {
+  AI
+  MANUAL
+  SELF_SERVICE
+}
+
+enum ConversationChannel {
+  WEB_CHAT
+  WHATSAPP
+}
+
+enum ConversationStatus {
+  OPEN
+  RESOLVED
+  ESCALATED
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+}
+
+enum SyncDirection {
+  READ_ONLY
+  WRITE_ONLY
+  BIDIRECTIONAL
+}
+
+enum NotificationType {
+  APPOINTMENT_CONFIRMATION
+  APPOINTMENT_REMINDER_24H
+  APPOINTMENT_REMINDER_1H
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  FOLLOW_UP
+  STAFF_NEW_BOOKING
+  STAFF_CANCELLATION
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  SMS
+  IN_APP
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+  AI
+}
+
+// ─── Identity & Tenancy ───────────────────────────────────────────────────────
+
+model User {
+  id             String         @id @default(cuid())
+  supabaseAuthId String         @unique
+  email          String         @unique
+  name           String?
+  avatarUrl      String?
+  createdAt      DateTime       @default(now())
+  memberships    TenantMember[]
+}
+
+model Tenant {
+  id             String         @id @default(cuid())
+  name           String
+  slug           String         @unique
+  logo           String?
+  plan           Plan           @default(STARTER)
+  timezone       String         @default("UTC")
+  parentTenantId String?
+  parent         Tenant?        @relation("AgencyClients", fields: [parentTenantId], references: [id])
+  children       Tenant[]       @relation("AgencyClients")
+  createdAt      DateTime       @default(now())
+  deletedAt      DateTime?
+
+  members              TenantMember[]
+  services             Service[]
+  appointments         Appointment[]
+  customers            Customer[]
+  conversations        Conversation[]
+  teamMembers          TeamMember[]
+  workingHours         WorkingHours[]
+  busyPeriods          BusyPeriod[]
+  aiSettings           AISettings?
+  aiPromptVersions     AIPromptVersion[]
+  aiUsageRecords       AIUsageRecord[]
+  analyticsEvents      AnalyticsEvent[]
+  dailySnapshots       DailySnapshot[]
+  notificationJobs     NotificationJob[]
+  auditLogs            AuditLog[]
+  featureOverrides     EntitlementOverride[]
+  calendarIntegrations CalendarIntegration[]
+  attachments          Attachment[]
+}
+
+model TenantMember {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([userId, tenantId])
+}
+
+// ─── Services & Scheduling ────────────────────────────────────────────────────
+
+model Service {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  duration    Int
+  bufferTime  Int       @default(0)
+  price       Decimal?
+  currency    String    @default("USD")
+  isActive    Boolean   @default(true)
+  maxPerDay   Int?
+  maxPerSlot  Int?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  appointments Appointment[]
+  teamMembers  TeamMemberService[]
+}
+
+model WorkingHours {
+  id           String  @id @default(cuid())
+  tenantId     String
+  teamMemberId String?
+  dayOfWeek    Int
+  startTime    String
+  endTime      String
+  isOpen       Boolean @default(true)
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  teamMember TeamMember? @relation(fields: [teamMemberId], references: [id])
+}
+
+model BusyPeriod {
+  id             String    @id @default(cuid())
+  tenantId       String
+  teamMemberId   String?
+  title          String?
+  startAt        DateTime
+  endAt          DateTime
+  isRecurring    Boolean   @default(false)
+  recurrenceRule String?
+  createdAt      DateTime  @default(now())
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  teamMember TeamMember? @relation(fields: [teamMemberId], references: [id])
+}
+
+// ─── Appointments ─────────────────────────────────────────────────────────────
+
+model Appointment {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  customerId         String
+  serviceId          String
+  teamMemberId       String?
+  conversationId     String?
+  startAt            DateTime
+  endAt              DateTime
+  status             AppointmentStatus @default(PENDING)
+  notes              String?
+  bookedVia          BookingChannel    @default(AI)
+  confirmedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime          @default(now())
+  deletedAt          DateTime?
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  service      Service       @relation(fields: [serviceId], references: [id])
+  teamMember   TeamMember?   @relation(fields: [teamMemberId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+}
+
+// ─── Customer CRM ─────────────────────────────────────────────────────────────
+
+model Customer {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  email      String?
+  phone      String?
+  avatarUrl  String?
+  notes      String?
+  tags       String[]
+  source     String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+  deletedAt  DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  appointments  Appointment[]
+  conversations Conversation[]
+
+  @@unique([tenantId, phone])
+  @@unique([tenantId, email])
+}
+
+// ─── AI Chat Inbox ────────────────────────────────────────────────────────────
+
+model Conversation {
+  id               String              @id @default(cuid())
+  tenantId         String
+  customerId       String?
+  channel          ConversationChannel
+  externalId       String?
+  status           ConversationStatus  @default(OPEN)
+  assignedToId     String?
+  aiHandled        Boolean             @default(true)
+  summary          String?
+  tags             String[]
+  extractedContext Json?
+  memoryVersion    Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  customer     Customer?          @relation(fields: [customerId], references: [id])
+  assignedTo   TeamMember?        @relation(fields: [assignedToId], references: [id])
+  messages     Message[]
+  appointments Appointment[]
+  notes        ConversationNote[]
+  attachments  Attachment[]
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  tokensUsed     Int?
+  provider       String?
+  model          String?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  attachment   Attachment[]
+}
+
+model ConversationNote {
+  id             String   @id @default(cuid())
+  conversationId String
+  authorId       String
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  author       TeamMember   @relation(fields: [authorId], references: [id])
+}
+
+model Attachment {
+  id             String    @id @default(cuid())
+  tenantId       String
+  messageId      String?
+  conversationId String?
+  uploadedById   String?
+  storageKey     String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  createdAt      DateTime  @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  message      Message?      @relation(fields: [messageId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+}
+
+// ─── Team Members ─────────────────────────────────────────────────────────────
+
+model TeamMember {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  userId                String?
+  name                  String
+  email                 String
+  role                  String?
+  avatarUrl             String?
+  isActive              Boolean   @default(true)
+  maxAppointmentsPerDay Int?
+  inviteToken           String?   @unique
+  createdAt             DateTime  @default(now())
+  deletedAt             DateTime?
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  services             TeamMemberService[]
+  appointments         Appointment[]
+  workingHours         WorkingHours[]
+  busyPeriods          BusyPeriod[]
+  conversations        Conversation[]
+  conversationNotes    ConversationNote[]
+  calendarIntegrations CalendarIntegration[]
+}
+
+model TeamMemberService {
+  teamMemberId String
+  serviceId    String
+
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id])
+  service    Service    @relation(fields: [serviceId], references: [id])
+
+  @@id([teamMemberId, serviceId])
+}
+
+// ─── AI Settings ──────────────────────────────────────────────────────────────
+
+model AISettings {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  provider         String   @default("openai")
+  model            String   @default("gpt-4o")
+  fallbackProvider String?
+  fallbackModel    String?
+  temperature      Float    @default(0.7)
+  systemPrompt     String?
+  maxTokens        Int      @default(1000)
+  byokApiKey       String?
+  autoBook         Boolean  @default(true)
+  requireConfirm   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model AIPromptVersion {
+  id           String    @id @default(cuid())
+  tenantId     String
+  version      Int
+  systemPrompt String
+  changelog    String?
+  isActive     Boolean   @default(false)
+  activatedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  createdById  String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, version])
+  @@index([tenantId, isActive])
+}
+
+model AIUsageRecord {
+  id               String   @id @default(cuid())
+  tenantId         String
+  conversationId   String?
+  messageId        String?
+  provider         String
+  model            String
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  estimatedCostUsd Decimal
+  isByok           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+}
+
+// ─── Calendar Integration ─────────────────────────────────────────────────────
+
+model CalendarIntegration {
+  id             String           @id @default(cuid())
+  tenantId       String
+  teamMemberId   String?
+  provider       CalendarProvider
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  calendarId     String
+  syncDirection  SyncDirection
+  lastSyncedAt   DateTime?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  teamMember TeamMember? @relation(fields: [teamMemberId], references: [id])
+}
+
+// ─── Feature Flags & Entitlements ─────────────────────────────────────────────
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String
+  enabledFor  Plan[]
+  createdAt   DateTime @default(now())
+}
+
+model EntitlementOverride {
+  id        String    @id @default(cuid())
+  tenantId  String
+  flagKey   String
+  enabled   Boolean
+  reason    String?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, flagKey])
+}
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  event      String
+  properties Json
+  occurredAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, event, occurredAt])
+}
+
+model DailySnapshot {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  date                   DateTime
+  appointmentsBooked     Int
+  appointmentsConfirmed  Int
+  appointmentsCancelled  Int
+  appointmentsCompleted  Int
+  appointmentsNoShow     Int
+  conversationsStarted   Int
+  conversationsResolved  Int
+  conversationsEscalated Int
+  aiMessagesCount        Int
+  aiTokensUsed           Int
+  aiEstimatedCostUsd     Decimal
+  bookingConversionRate  Decimal
+  newCustomersCount      Int
+  revenueUsd             Decimal
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model NotificationJob {
+  id            String              @id @default(cuid())
+  tenantId      String
+  type          NotificationType
+  channel       NotificationChannel
+  recipient     String
+  payload       Json
+  status        JobStatus           @default(PENDING)
+  scheduledFor  DateTime
+  attempts      Int                 @default(0)
+  lastAttemptAt DateTime?
+  failureReason String?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([status, scheduledFor])
+  @@index([tenantId, type])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String         @id @default(cuid())
+  tenantId   String
+  actorId    String?
+  actorType  AuditActorType
+  action     String
+  resource   String
+  resourceId String
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, resource, resourceId])
 }
