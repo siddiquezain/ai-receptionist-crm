@@ -1,5 +1,4 @@
 import { Plan } from "@prisma/client";
-import { prisma } from "./prisma";
 
 /**
  * Check if a tenant has access to a feature flag.
@@ -10,6 +9,8 @@ export async function hasFeature(
   plan: Plan,
   flagKey: string
 ): Promise<boolean> {
+  const { prisma } = await import("./prisma");
+
   // 1. Check per-tenant override
   const override = await prisma.entitlementOverride.findUnique({
     where: { tenantId_flagKey: { tenantId, flagKey } },

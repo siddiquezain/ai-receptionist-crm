@@ -1,5 +1,4 @@
 import { headers } from "next/headers";
-import { prisma } from "./prisma";
 
 export const TENANT_HEADER = "x-tenant-id";
 export const TENANT_SLUG_HEADER = "x-tenant-slug";
@@ -23,6 +22,7 @@ export async function getTenantIdFromHeaders(): Promise<string> {
  * Resolve a tenant by slug. Returns null if not found or soft-deleted.
  */
 export async function resolveTenantBySlug(slug: string) {
+  const { prisma } = await import("./prisma");
   return prisma.tenant.findFirst({
     where: { slug, deletedAt: null },
     select: {
@@ -41,6 +41,7 @@ export async function resolveTenantBySlug(slug: string) {
  * Verify user is a member of tenant. Returns membership or null.
  */
 export async function getTenantMembership(userId: string, tenantId: string) {
+  const { prisma } = await import("./prisma");
   return prisma.tenantMember.findUnique({
     where: { userId_tenantId: { userId, tenantId } },
     select: { role: true, tenantId: true },

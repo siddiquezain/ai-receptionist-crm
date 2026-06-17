@@ -1,4 +1,4 @@
-# AI Appointment Booking SaaS — Design Specification
+contin# AI Appointment Booking SaaS — Design Specification
 
 **Date:** 2026-06-17
 **Status:** Approved
