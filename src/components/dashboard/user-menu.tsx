@@ -34,9 +34,13 @@ export function UserMenu({ name, email }: UserMenuProps) {
 
   async function handleSignOut() {
     setLoading(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/login");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
