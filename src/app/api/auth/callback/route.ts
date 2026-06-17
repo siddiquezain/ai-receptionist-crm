@@ -19,19 +19,22 @@ export async function GET(request: NextRequest) {
   }
 
   const { user } = data;
-  const meta = user.user_metadata as {
-    full_name?: string;
-    business_name?: string;
-  };
+  const meta = user.user_metadata ?? {};
+  const fullName = typeof meta.full_name === "string" ? meta.full_name : null;
+  const businessName =
+    typeof meta.business_name === "string" ? meta.business_name : null;
 
   // If metadata is present (registration flow), create Prisma records
-  if (meta?.full_name && meta?.business_name) {
+  if (fullName && businessName) {
+    if (!user.email) {
+      return NextResponse.redirect(`${origin}/login?error=missing_email`);
+    }
     try {
       const slug = await ensureUserWithTenant({
         supabaseUserId: user.id,
-        email: user.email!,
-        fullName: meta.full_name,
-        businessName: meta.business_name,
+        email: user.email,
+        fullName,
+        businessName,
       });
       return NextResponse.redirect(`${origin}/${slug}/dashboard`);
     } catch {
