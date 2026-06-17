@@ -277,20 +277,27 @@ model WorkingHours {
   isOpen       Boolean     @default(true)
   tenant       Tenant      @relation(fields: [tenantId], references: [id])
   teamMember   TeamMember? @relation(fields: [teamMemberId], references: [id])
-  @@unique([tenantId, teamMemberId, dayOfWeek])
+  // NOTE: @@unique([tenantId, teamMemberId, dayOfWeek]) is intentionally omitted.
+  // PostgreSQL allows multiple NULLs in unique constraints, so this would not
+  // prevent duplicate business-level rows (where teamMemberId IS NULL).
+  // Uniqueness for business-level hours (teamMemberId = null) is enforced at
+  // the application layer. A raw migration adds two partial unique indexes:
+  //   UNIQUE (tenantId, dayOfWeek) WHERE teamMemberId IS NULL
+  //   UNIQUE (tenantId, teamMemberId, dayOfWeek) WHERE teamMemberId IS NOT NULL
 }
 
 model BusyPeriod {
-  id           String      @id @default(cuid())
-  tenantId     String
-  teamMemberId String?
-  title        String?
-  startAt      DateTime
-  endAt        DateTime
-  isRecurring  Boolean     @default(false)
-  createdAt    DateTime    @default(now())
-  tenant       Tenant      @relation(fields: [tenantId], references: [id])
-  teamMember   TeamMember? @relation(fields: [teamMemberId], references: [id])
+  id             String      @id @default(cuid())
+  tenantId       String
+  teamMemberId   String?
+  title          String?
+  startAt        DateTime
+  endAt          DateTime
+  isRecurring    Boolean     @default(false)
+  recurrenceRule String?     // RRULE string e.g. "FREQ=WEEKLY;BYDAY=FR" — required when isRecurring = true
+  createdAt      DateTime    @default(now())
+  tenant         Tenant      @relation(fields: [tenantId], references: [id])
+  teamMember     TeamMember? @relation(fields: [teamMemberId], references: [id])
 }
 ```
 
@@ -426,7 +433,7 @@ model AISettings {
   temperature      Float    @default(0.7)
   systemPrompt     String?
   maxTokens        Int      @default(1000)
-  byokApiKey       String?
+  byokApiKey       String?  // AES-256 encrypted at rest — never returned to client
   autoBook         Boolean  @default(true)
   requireConfirm   Boolean  @default(false)
   createdAt        DateTime @default(now())
