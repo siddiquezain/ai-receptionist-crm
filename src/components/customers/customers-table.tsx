@@ -39,10 +39,11 @@ export function CustomersTable({
   const [addingTagId, setAddingTagId] = useState<string | null>(null);
   const [newTag, setNewTag] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const tagInputRef = useRef<HTMLInputElement>(null);
+  const committingRef = useRef(false);
+  const addingTagRef = useRef(false);
 
   function startEditName(customer: CustomerListItem) {
     setEditingId(customer.id);
@@ -52,17 +53,25 @@ export function CustomersTable({
   }
 
   async function commitEditName(customer: CustomerListItem) {
+    if (committingRef.current) return;
     const trimmed = editName.trim();
     if (!trimmed || trimmed === customer.name) {
       setEditingId(null);
       return;
     }
+    committingRef.current = true;
     setEditingId(null);
-    const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
-      name: trimmed,
-    });
-    if (!result.success) {
-      toast.error(result.error ?? "Failed to update name");
+    try {
+      const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
+        name: trimmed,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to update name");
+      }
+    } catch {
+      toast.error("Failed to update name");
+    } finally {
+      committingRef.current = false;
     }
   }
 
@@ -75,25 +84,37 @@ export function CustomersTable({
   }
 
   async function removeTag(customer: CustomerListItem, tag: string) {
-    const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
-      tags: customer.tags.filter((t) => t !== tag),
-    });
-    if (!result.success) toast.error(result.error ?? "Failed to remove tag");
+    try {
+      const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
+        tags: customer.tags.filter((t) => t !== tag),
+      });
+      if (!result.success) toast.error(result.error ?? "Failed to remove tag");
+    } catch {
+      toast.error("Failed to remove tag");
+    }
   }
 
   async function addTag(customer: CustomerListItem) {
+    if (addingTagRef.current) return;
     const tag = newTag.trim();
     if (!tag || customer.tags.includes(tag)) {
       setAddingTagId(null);
       setNewTag("");
       return;
     }
+    addingTagRef.current = true;
     setAddingTagId(null);
     setNewTag("");
-    const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
-      tags: [...customer.tags, tag],
-    });
-    if (!result.success) toast.error(result.error ?? "Failed to add tag");
+    try {
+      const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
+        tags: [...customer.tags, tag],
+      });
+      if (!result.success) toast.error(result.error ?? "Failed to add tag");
+    } catch {
+      toast.error("Failed to add tag");
+    } finally {
+      addingTagRef.current = false;
+    }
   }
 
   function handleTagKeyDown(
@@ -108,11 +129,16 @@ export function CustomersTable({
   }
 
   async function handleDelete(id: string) {
-    setDeleting(true);
-    const result = await deleteCustomer(tenantId, tenantSlug, id);
-    setDeleting(false);
-    setConfirmDeleteId(null);
-    if (!result.success) toast.error(result.error ?? "Failed to delete customer");
+    setDeletingId(id);
+    try {
+      const result = await deleteCustomer(tenantId, tenantSlug, id);
+      if (!result.success) toast.error(result.error ?? "Failed to delete customer");
+    } catch {
+      toast.error("Failed to delete customer");
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
   }
 
   if (customers.length === 0) {
@@ -148,16 +174,20 @@ export function CustomersTable({
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--border)]">
-              {["", "Name", "Email", "Phone", "Tags", "Last seen", "Appts", ""].map(
-                (h, i) => (
-                  <th
-                    key={i}
-                    className="px-3 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]"
-                  >
-                    {h}
-                  </th>
-                )
-              )}
+              {[
+                { key: "avatar", label: "" },
+                { key: "name", label: "Name" },
+                { key: "email", label: "Email" },
+                { key: "phone", label: "Phone" },
+                { key: "tags", label: "Tags" },
+                { key: "lastSeen", label: "Last seen" },
+                { key: "appts", label: "Appts" },
+                { key: "actions", label: "" },
+              ].map(({ key, label }) => (
+                <th key={key} className="px-3 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]">
+                  {label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -169,6 +199,14 @@ export function CustomersTable({
                 <td
                   className="cursor-pointer px-3 py-2.5"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/${tenantSlug}/customers/${customer.id}`);
+                    }
+                  }}
                 >
                   <CustomerAvatar name={customer.name} size="sm" />
                 </td>
@@ -197,6 +235,14 @@ export function CustomersTable({
                 <td
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/${tenantSlug}/customers/${customer.id}`);
+                    }
+                  }}
                 >
                   {customer.email ?? "—"}
                 </td>
@@ -204,6 +250,14 @@ export function CustomersTable({
                 <td
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/${tenantSlug}/customers/${customer.id}`);
+                    }
+                  }}
                 >
                   {customer.phone ?? "—"}
                 </td>
@@ -230,7 +284,6 @@ export function CustomersTable({
                     ))}
                     {addingTagId === customer.id ? (
                       <Input
-                        ref={tagInputRef}
                         autoFocus
                         value={newTag}
                         onChange={(e) => setNewTag(e.target.value)}
@@ -244,7 +297,6 @@ export function CustomersTable({
                         onClick={() => {
                           setAddingTagId(customer.id);
                           setNewTag("");
-                          setTimeout(() => tagInputRef.current?.focus(), 0);
                         }}
                         className="flex size-4 items-center justify-center rounded-full border border-dashed border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                         aria-label="Add tag"
@@ -258,6 +310,14 @@ export function CustomersTable({
                 <td
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/${tenantSlug}/customers/${customer.id}`);
+                    }
+                  }}
                 >
                   {customer.lastSeenAt ? timeAgo(customer.lastSeenAt) : "—"}
                 </td>
@@ -265,6 +325,14 @@ export function CustomersTable({
                 <td
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/${tenantSlug}/customers/${customer.id}`);
+                    }
+                  }}
                 >
                   {customer._count.appointments}
                 </td>
@@ -279,7 +347,7 @@ export function CustomersTable({
                       <Button
                         size="xs"
                         variant="destructive"
-                        disabled={deleting}
+                        disabled={deletingId === customer.id}
                         onClick={() => handleDelete(customer.id)}
                       >
                         Yes
