@@ -90,14 +90,14 @@ export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
       {/* Staff filter */}
       {staff.length > 0 && (
         <Select
-          value={currentStaffId}
-          onValueChange={(v) => updateParams({ staffId: String(v ?? "") })}
+          value={currentStaffId || "__all__"}
+          onValueChange={(v) => updateParams({ staffId: v === "__all__" ? "" : (v ?? "") })}
         >
           <SelectTrigger className="h-7 w-36 text-xs">
             <SelectValue placeholder="All staff" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All staff</SelectItem>
+            <SelectItem value="__all__">All staff</SelectItem>
             {staff.map((s) => (
               <SelectItem key={s.id} value={s.id}>
                 {s.name}
