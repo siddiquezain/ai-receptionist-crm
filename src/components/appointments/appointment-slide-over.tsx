@@ -149,6 +149,19 @@ export function AppointmentSlideOver({
       .finally(() => setLoadingDetail(false));
   }, [open, appointmentId, tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const watchedStart = form.watch("startAt");
+  const watchedEnd = form.watch("endAt");
+  const timeInvalid =
+    watchedStart && watchedEnd
+      ? new Date(watchedEnd) <= new Date(watchedStart)
+      : false;
+
+  const canCancel =
+    !isCreateMode &&
+    form.watch("status") !== AppointmentStatus.CANCELLED &&
+    form.watch("status") !== AppointmentStatus.COMPLETED &&
+    form.watch("status") !== AppointmentStatus.NO_SHOW;
+
   async function onSubmit(data: AppointmentFormData) {
     setErrorBanner(null);
     setSaving(true);
@@ -419,19 +432,16 @@ export function AppointmentSlideOver({
             </div>
 
             <SheetFooter className="border-t border-[var(--border)] px-5 py-4">
-              <Button type="submit" disabled={saving} className="w-full">
+              <Button type="submit" disabled={saving || !!timeInvalid} className="w-full">
                 {saving && <Loader2 className="mr-2 size-3.5 animate-spin" />}
                 {isCreateMode ? "Create appointment" : "Save changes"}
               </Button>
-              {!isCreateMode && (
+              {canCancel && (
                 <Button
                   type="button"
                   variant="destructive"
                   className="w-full mt-2"
-                  disabled={
-                    saving ||
-                    form.watch("status") === AppointmentStatus.CANCELLED
-                  }
+                  disabled={saving}
                   onClick={async () => {
                     setSaving(true);
                     const vals = form.getValues();
