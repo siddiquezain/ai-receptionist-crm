@@ -106,16 +106,20 @@ export async function deleteCustomer(
   slug: string,
   id: string
 ): Promise<ActionResult> {
-  const existing = await prisma.customer.findFirst({
-    where: { id, tenantId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!existing) return { success: false, error: "Customer not found" };
+  try {
+    const existing = await prisma.customer.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) return { success: false, error: "Customer not found" };
 
-  await prisma.customer.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
-  revalidatePath(`/${slug}/customers`);
-  return { success: true };
+    await prisma.customer.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    revalidatePath(`/${slug}/customers`);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to delete customer" };
+  }
 }
