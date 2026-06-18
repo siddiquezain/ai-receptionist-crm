@@ -1,0 +1,111 @@
+"use client";
+
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useCallback } from "react";
+import { AppointmentStatus } from "@prisma/client";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { StaffOption } from "@/lib/appointments-queries";
+
+interface AppointmentsFiltersProps {
+  staff: StaffOption[];
+}
+
+const STATUS_TABS = [
+  { label: "All", value: "" },
+  { label: "Pending", value: AppointmentStatus.PENDING },
+  { label: "Confirmed", value: AppointmentStatus.CONFIRMED },
+  { label: "Completed", value: AppointmentStatus.COMPLETED },
+  { label: "Cancelled", value: AppointmentStatus.CANCELLED },
+] as const;
+
+export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const updateParams = useCallback(
+    (updates: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("page");
+      for (const [key, value] of Object.entries(updates)) {
+        if (value) {
+          params.set(key, value);
+        } else {
+          params.delete(key);
+        }
+      }
+      router.replace(`${pathname}?${params.toString()}`);
+    },
+    [router, pathname, searchParams]
+  );
+
+  const currentStatus = searchParams.get("status") ?? "";
+  const currentFrom = searchParams.get("from") ?? "";
+  const currentTo = searchParams.get("to") ?? "";
+  const currentStaffId = searchParams.get("staffId") ?? "";
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {/* Status tabs */}
+      <div className="flex items-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] p-0.5 gap-0.5">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => updateParams({ status: tab.value })}
+            className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors ${
+              currentStatus === tab.value
+                ? "bg-[var(--accent)] text-white"
+                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Date range */}
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="date"
+          value={currentFrom}
+          onChange={(e) => updateParams({ from: e.target.value })}
+          className="h-7 w-36 text-xs"
+        />
+        <span className="text-xs text-[var(--text-muted)]">–</span>
+        <Input
+          type="date"
+          value={currentTo}
+          onChange={(e) => updateParams({ to: e.target.value })}
+          className="h-7 w-36 text-xs"
+        />
+      </div>
+
+      {/* Staff filter */}
+      {staff.length > 0 && (
+        <Select
+          value={currentStaffId}
+          onValueChange={(v) => updateParams({ staffId: String(v ?? "") })}
+        >
+          <SelectTrigger className="h-7 w-36 text-xs">
+            <SelectValue placeholder="All staff" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All staff</SelectItem>
+            {staff.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
