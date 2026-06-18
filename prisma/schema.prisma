@@ -55,6 +55,7 @@ enum MessageRole {
   USER
   ASSISTANT
   SYSTEM
+  STAFF
 }
 
 enum CalendarProvider {
@@ -292,6 +293,7 @@ model Message {
   conversationId String
   role           MessageRole
   content        String
+  isDraft        Boolean     @default(false)
   tokensUsed     Int?
   provider       String?
   model          String?
