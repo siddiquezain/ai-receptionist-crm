@@ -120,10 +120,10 @@ export async function getConversationMessages(
       content: true,
       isDraft: true,
       createdAt: true,
-    } as any,
+    },
   });
 
-  return messages as unknown as MessageItem[];
+  return messages;
 }
 
 export async function getConversationDetail(
