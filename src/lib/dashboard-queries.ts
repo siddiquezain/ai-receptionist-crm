@@ -1,4 +1,4 @@
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, ConversationStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 import type { StatCardData } from "@/types";
 
@@ -27,19 +27,16 @@ export async function getStatCards(tenantId: string): Promise<{
   openConversations: StatCardData;
   conversionRate: StatCardData;
 }> {
+  const now = new Date();
   const today = utcDayRange(0);
   const yesterday = utcDayRange(1);
 
   const sixDaysAgo = new Date(
-    Date.UTC(
-      new Date().getUTCFullYear(),
-      new Date().getUTCMonth(),
-      new Date().getUTCDate() - 6
-    )
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6)
   );
 
   const monthStart = new Date(
-    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
   );
 
   const [
@@ -63,10 +60,10 @@ export async function getStatCards(tenantId: string): Promise<{
       select: { startAt: true },
     }),
     prisma.appointment.count({
-      where: { tenantId, status: "PENDING" },
+      where: { tenantId, status: AppointmentStatus.PENDING },
     }),
     prisma.conversation.count({
-      where: { tenantId, status: "OPEN" },
+      where: { tenantId, status: ConversationStatus.OPEN },
     }),
     prisma.conversation.count({
       where: { tenantId, createdAt: { gte: sixDaysAgo } },
@@ -80,7 +77,6 @@ export async function getStatCards(tenantId: string): Promise<{
   ]);
 
   // Build sparkline (appointments per UTC day, last 7 days)
-  const now = new Date();
   const sparklineMap = new Map<string, number>();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(
@@ -141,9 +137,12 @@ export async function getTrendData(tenantId: string): Promise<TrendDataPoint[]> 
   const sixDaysAgo = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6)
   );
+  const todayEnd = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
+  );
 
   const appointments = await prisma.appointment.findMany({
-    where: { tenantId, startAt: { gte: sixDaysAgo } },
+    where: { tenantId, startAt: { gte: sixDaysAgo, lt: todayEnd } },
     select: { startAt: true },
   });
 
@@ -189,7 +188,7 @@ export async function getUpcomingAppointments(
     where: {
       tenantId,
       startAt: { gte: new Date() },
-      status: { notIn: ["CANCELLED", "COMPLETED", "NO_SHOW"] },
+      status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW] },
     },
     take: 5,
     orderBy: { startAt: "asc" },
@@ -217,7 +216,7 @@ export async function getInboxSnapshot(
   tenantId: string
 ): Promise<InboxConversation[]> {
   return prisma.conversation.findMany({
-    where: { tenantId, status: "OPEN" },
+    where: { tenantId, status: ConversationStatus.OPEN },
     take: 3,
     orderBy: { updatedAt: "desc" },
     select: {
