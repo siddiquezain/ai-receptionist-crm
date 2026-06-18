@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -62,6 +62,10 @@ function toDatetimeLocal(date: Date): string {
   return format(date, "yyyy-MM-dd'T'HH:mm");
 }
 
+function formatStatusLabel(status: AppointmentStatus): string {
+  return status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " ");
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface AppointmentSlideOverProps {
@@ -70,7 +74,6 @@ interface AppointmentSlideOverProps {
   appointmentId: string | null;
   tenantId: string;
   tenantSlug: string;
-  timezone: string;
   services: ServiceOption[];
   staff: StaffOption[];
   customers: CustomerOption[];
@@ -84,7 +87,6 @@ export function AppointmentSlideOver({
   appointmentId,
   tenantId,
   tenantSlug,
-  timezone,
   services,
   staff,
   customers,
@@ -96,6 +98,7 @@ export function AppointmentSlideOver({
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -127,12 +130,15 @@ export function AppointmentSlideOver({
       return;
     }
 
+    let cancelled = false;
     setLoadingDetail(true);
+
     fetchAppointmentDetail(tenantId, appointmentId!)
       .then((d) => {
+        if (cancelled) return;
         if (!d) {
           setErrorBanner("Appointment not found");
-          setTimeout(onClose, 2000);
+          closeTimerRef.current = setTimeout(onClose, 2000);
           return;
         }
         setDetail(d);
@@ -145,12 +151,28 @@ export function AppointmentSlideOver({
           status: d.status,
         });
       })
-      .catch(() => setErrorBanner("Failed to load appointment"))
-      .finally(() => setLoadingDetail(false));
+      .catch(() => {
+        if (!cancelled) setErrorBanner("Failed to load appointment");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
   }, [open, appointmentId, tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Consolidated watches
   const watchedStart = form.watch("startAt");
   const watchedEnd = form.watch("endAt");
+  const watchedStatus = form.watch("status");
+  const watchedCustomerId = form.watch("customerId");
+
   const timeInvalid =
     watchedStart && watchedEnd
       ? new Date(watchedEnd) <= new Date(watchedStart)
@@ -158,48 +180,75 @@ export function AppointmentSlideOver({
 
   const canCancel =
     !isCreateMode &&
-    form.watch("status") !== AppointmentStatus.CANCELLED &&
-    form.watch("status") !== AppointmentStatus.COMPLETED &&
-    form.watch("status") !== AppointmentStatus.NO_SHOW;
+    watchedStatus !== AppointmentStatus.CANCELLED &&
+    watchedStatus !== AppointmentStatus.COMPLETED &&
+    watchedStatus !== AppointmentStatus.NO_SHOW;
 
   async function onSubmit(data: AppointmentFormData) {
     setErrorBanner(null);
     setSaving(true);
 
-    let result;
-    if (isCreateMode) {
-      if (!data.customerId) {
-        form.setError("customerId", { message: "Customer is required" });
-        setSaving(false);
+    try {
+      let result;
+      if (isCreateMode) {
+        if (!data.customerId) {
+          form.setError("customerId", { message: "Customer is required" });
+          return;
+        }
+        result = await createAppointment(tenantId, tenantSlug, {
+          customerId: data.customerId,
+          serviceId: data.serviceId,
+          teamMemberId: data.teamMemberId || null,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          notes: data.notes ?? "",
+        });
+      } else {
+        result = await updateAppointment(tenantId, tenantSlug, appointmentId!, {
+          serviceId: data.serviceId,
+          teamMemberId: data.teamMemberId || null,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          notes: data.notes ?? "",
+          status: data.status,
+        });
+      }
+
+      if (!result.success) {
+        setErrorBanner(result.error ?? "Something went wrong");
         return;
       }
-      result = await createAppointment(tenantId, tenantSlug, {
-        customerId: data.customerId,
-        serviceId: data.serviceId,
-        teamMemberId: data.teamMemberId || null,
-        startAt: data.startAt,
-        endAt: data.endAt,
-        notes: data.notes ?? "",
-      });
-    } else {
-      result = await updateAppointment(tenantId, tenantSlug, appointmentId!, {
-        serviceId: data.serviceId,
-        teamMemberId: data.teamMemberId || null,
-        startAt: data.startAt,
-        endAt: data.endAt,
-        notes: data.notes ?? "",
-        status: data.status,
-      });
-    }
 
-    setSaving(false);
-    if (!result.success) {
-      setErrorBanner(result.error ?? "Something went wrong");
-      return;
+      toast.success(isCreateMode ? "Appointment created" : "Appointment saved");
+      onClose();
+    } catch {
+      setErrorBanner("Something went wrong. Please try again.");
+    } finally {
+      setSaving(false);
     }
+  }
 
-    toast.success(isCreateMode ? "Appointment created" : "Appointment saved");
-    onClose();
+  async function handleCancel() {
+    setSaving(true);
+    try {
+      const vals = form.getValues();
+      const result = await updateAppointment(tenantId, tenantSlug, appointmentId!, {
+        ...vals,
+        teamMemberId: vals.teamMemberId || null,
+        notes: vals.notes ?? "",
+        status: AppointmentStatus.CANCELLED,
+      });
+      if (!result.success) {
+        setErrorBanner(result.error ?? "Failed to cancel");
+        return;
+      }
+      toast.success("Appointment cancelled");
+      onClose();
+    } catch {
+      setErrorBanner("Failed to cancel appointment");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const filteredCustomers = customers.filter((c) =>
@@ -226,7 +275,10 @@ export function AppointmentSlideOver({
         </SheetHeader>
 
         {errorBanner && (
-          <div className="mx-5 mt-4 rounded-[5px] bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+          <div
+            role="alert"
+            className="mx-5 mt-4 rounded-[5px] bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]"
+          >
             {errorBanner}
           </div>
         )}
@@ -246,10 +298,14 @@ export function AppointmentSlideOver({
               {/* Customer — create mode only */}
               {isCreateMode && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[var(--text-muted)]">
+                  <label
+                    htmlFor="customer-search"
+                    className="text-xs font-medium text-[var(--text-muted)]"
+                  >
                     Customer *
                   </label>
                   <Input
+                    id="customer-search"
                     placeholder="Search customers…"
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
@@ -267,7 +323,7 @@ export function AppointmentSlideOver({
                             key={c.id}
                             type="button"
                             className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg)] ${
-                              form.watch("customerId") === c.id
+                              watchedCustomerId === c.id
                                 ? "bg-[var(--accent)]/10 text-[var(--accent)]"
                                 : "text-[var(--text-primary)]"
                             }`}
@@ -299,7 +355,10 @@ export function AppointmentSlideOver({
 
               {/* Service */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--text-muted)]">
+                <label
+                  id="service-label"
+                  className="text-xs font-medium text-[var(--text-muted)]"
+                >
                   Service *
                 </label>
                 <Select
@@ -310,7 +369,7 @@ export function AppointmentSlideOver({
                     })
                   }
                 >
-                  <SelectTrigger className="text-sm">
+                  <SelectTrigger aria-labelledby="service-label" className="text-sm">
                     <SelectValue placeholder="Select a service" />
                   </SelectTrigger>
                   <SelectContent>
@@ -331,7 +390,10 @@ export function AppointmentSlideOver({
 
               {/* Staff */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--text-muted)]">
+                <label
+                  id="staff-label"
+                  className="text-xs font-medium text-[var(--text-muted)]"
+                >
                   Staff member
                 </label>
                 <Select
@@ -343,7 +405,7 @@ export function AppointmentSlideOver({
                     )
                   }
                 >
-                  <SelectTrigger className="text-sm">
+                  <SelectTrigger aria-labelledby="staff-label" className="text-sm">
                     <SelectValue placeholder="Unassigned" />
                   </SelectTrigger>
                   <SelectContent>
@@ -359,10 +421,14 @@ export function AppointmentSlideOver({
 
               {/* Start time */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--text-muted)]">
+                <label
+                  htmlFor="start-at"
+                  className="text-xs font-medium text-[var(--text-muted)]"
+                >
                   Start time *
                 </label>
                 <Input
+                  id="start-at"
                   type="datetime-local"
                   className="text-sm"
                   {...form.register("startAt")}
@@ -376,10 +442,14 @@ export function AppointmentSlideOver({
 
               {/* End time */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--text-muted)]">
+                <label
+                  htmlFor="end-at"
+                  className="text-xs font-medium text-[var(--text-muted)]"
+                >
                   End time *
                 </label>
                 <Input
+                  id="end-at"
                   type="datetime-local"
                   className="text-sm"
                   {...form.register("endAt")}
@@ -394,22 +464,25 @@ export function AppointmentSlideOver({
               {/* Status — edit mode only */}
               {!isCreateMode && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[var(--text-muted)]">
+                  <label
+                    id="status-label"
+                    className="text-xs font-medium text-[var(--text-muted)]"
+                  >
                     Status
                   </label>
                   <Select
-                    value={form.watch("status")}
+                    value={watchedStatus}
                     onValueChange={(v) =>
                       form.setValue("status", v as AppointmentStatus)
                     }
                   >
-                    <SelectTrigger className="text-sm">
+                    <SelectTrigger aria-labelledby="status-label" className="text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {Object.values(AppointmentStatus).map((s) => (
                         <SelectItem key={s} value={s}>
-                          {s.charAt(0) + s.slice(1).toLowerCase().replace("_", " ")}
+                          {formatStatusLabel(s)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -419,10 +492,14 @@ export function AppointmentSlideOver({
 
               {/* Notes */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--text-muted)]">
+                <label
+                  htmlFor="notes"
+                  className="text-xs font-medium text-[var(--text-muted)]"
+                >
                   Notes
                 </label>
                 <Textarea
+                  id="notes"
                   className="text-sm resize-none"
                   rows={3}
                   placeholder="Internal notes…"
@@ -442,28 +519,7 @@ export function AppointmentSlideOver({
                   variant="destructive"
                   className="w-full mt-2"
                   disabled={saving}
-                  onClick={async () => {
-                    setSaving(true);
-                    const vals = form.getValues();
-                    const result = await updateAppointment(
-                      tenantId,
-                      tenantSlug,
-                      appointmentId!,
-                      {
-                        ...vals,
-                        teamMemberId: vals.teamMemberId || null,
-                        notes: vals.notes ?? "",
-                        status: AppointmentStatus.CANCELLED,
-                      }
-                    );
-                    setSaving(false);
-                    if (!result.success) {
-                      setErrorBanner(result.error ?? "Failed to cancel");
-                      return;
-                    }
-                    toast.success("Appointment cancelled");
-                    onClose();
-                  }}
+                  onClick={handleCancel}
                 >
                   Cancel appointment
                 </Button>
