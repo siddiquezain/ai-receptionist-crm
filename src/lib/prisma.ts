@@ -1,8 +1,19 @@
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+// ─── Adapter ─────────────────────────────────────────────────────────────────
+// Prisma 7 requires a driver adapter. PrismaPg uses the `pg` package and reads
+// DATABASE_URL from the environment automatically.
+
+function createAdapter() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set");
+  }
+  return new PrismaPg({ connectionString });
+}
+
+// ─── Soft-delete extension ────────────────────────────────────────────────────
 
 const SOFT_DELETE_MODELS = new Set([
   "Customer",
@@ -13,47 +24,11 @@ const SOFT_DELETE_MODELS = new Set([
   "Tenant",
 ]);
 
-const prismaClientSingleton = (): PrismaClient => {
-  if (globalForPrisma.prisma) {
-    return globalForPrisma.prisma;
-  }
+// ─── Singleton ────────────────────────────────────────────────────────────────
 
-  try {
-    const client = new PrismaClient({
-      log:
-        process.env.NODE_ENV === "development"
-          ? ["query", "error", "warn"]
-          : ["error"],
-    } as any);
-
-    if (process.env.NODE_ENV !== "production") {
-      globalForPrisma.prisma = client;
-    }
-
-    return client;
-  } catch (error) {
-    console.error("Failed to initialize PrismaClient:", (error as any).message);
-    // In development without DATABASE_URL, create a minimal mock
-    // that will error if actually used (which is fine for static pages)
-    if (process.env.NODE_ENV !== "production" && !process.env.DATABASE_URL) {
-      return new Proxy(
-        {},
-        {
-          get() {
-            throw new Error(
-              "PrismaClient not initialized: DATABASE_URL not configured"
-            );
-          },
-        }
-      ) as unknown as PrismaClient;
-    }
-    throw error;
-  }
+const globalForPrisma = globalThis as unknown as {
+  prisma: ReturnType<typeof extendPrisma> | undefined;
 };
-
-declare global {
-  var prismaExtended: ReturnType<PrismaClient["$extends"]> | undefined;
-}
 
 function extendPrisma(client: PrismaClient): ReturnType<PrismaClient["$extends"]> {
   return client.$extends({
@@ -73,8 +48,6 @@ function extendPrisma(client: PrismaClient): ReturnType<PrismaClient["$extends"]
         },
         async findUnique({ model, args, query }) {
           if (SOFT_DELETE_MODELS.has(model)) {
-            // Downgrade to findFirst so we can add the deletedAt filter
-            // (findUnique only accepts unique fields; findFirst accepts any where clause)
             const { where, ...rest } = args as { where: Record<string, unknown> };
             return (client as unknown as Record<string, { findFirst: (a: unknown) => unknown }>)[
               model.charAt(0).toLowerCase() + model.slice(1)
@@ -87,12 +60,24 @@ function extendPrisma(client: PrismaClient): ReturnType<PrismaClient["$extends"]
   });
 }
 
-// Use $extends for soft-delete filtering (Prisma 7 — $use is removed)
-const _prismaBase = prismaClientSingleton();
-export const prisma = extendPrisma(_prismaBase) as unknown as PrismaClient;
+function createPrisma() {
+  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+
+  const adapter = createAdapter();
+  const client = new PrismaClient({ adapter });
+  const extended = extendPrisma(client);
+
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prisma = extended;
+  }
+
+  return extended;
+}
+
+export const prisma = createPrisma() as unknown as PrismaClient;
 
 export type PrismaTransactionClient = Parameters<
-  Parameters<typeof _prismaBase["$transaction"]>[0]
+  Parameters<PrismaClient["$transaction"]>[0]
 >[0];
 
 /**
