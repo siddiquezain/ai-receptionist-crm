@@ -131,7 +131,7 @@ export function CustomersTable({
         ) : (
           <>
             <p className="text-sm text-[var(--text-muted)]">
-              No customers yet
+              No customers found
             </p>
             <Button variant="outline" size="sm" onClick={onCreateClick}>
               Add your first customer
