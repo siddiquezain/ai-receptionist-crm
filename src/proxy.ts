@@ -5,7 +5,7 @@ import { TENANT_SLUG_HEADER } from "@/lib/tenant";
 const PUBLIC_ROUTES = ["/login", "/register", "/forgot-password"];
 const BOOKING_ROUTE_PREFIX = "/book/";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
