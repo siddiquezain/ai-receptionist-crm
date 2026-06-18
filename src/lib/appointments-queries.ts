@@ -55,6 +55,11 @@ export async function getAppointments(
   filters: AppointmentFilters = {}
 ): Promise<{ appointments: AppointmentListItem[]; hasMore: boolean }> {
   const { status, from, to, staffId, page = 1 } = filters;
+
+  if (from !== undefined && to !== undefined && from > to) {
+    return { appointments: [], hasMore: false };
+  }
+
   const take = page * 20;
 
   const where = {
@@ -122,7 +127,8 @@ export async function getAppointmentDetail(
   });
 
   if (!appt) return null;
-  return { ...appt, bookedVia: appt.bookedVia as string } as AppointmentDetail;
+  // bookedVia has a schema default (AI) so it's always present; cast from enum to string
+  return { ...appt, bookedVia: String(appt.bookedVia) } as AppointmentDetail;
 }
 
 export async function getStaffOptions(tenantId: string): Promise<StaffOption[]> {
