@@ -79,14 +79,14 @@ export function UpcomingAppointments({ appointments, timezone }: Props) {
             </thead>
             <tbody>
               {appointments.map((appt) => {
-                const s = STATUS[appt.status];
+                const s = STATUS[appt.status] ?? STATUS.PENDING;
                 return (
                   <tr
                     key={appt.id}
                     className="border-b border-[var(--border)] last:border-0 transition-colors hover:bg-[var(--bg)]"
                   >
                     <td className="px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
-                      {appt.customer.name}
+                      {appt.customer?.name ?? "Unknown"}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-[var(--text-muted)]">
                       {appt.service.name}
