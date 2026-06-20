@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Bot } from "lucide-react";
 import { getBookingTenant, getBookingServices, getAvailableDates } from "@/lib/booking-queries";
 import { BookingClient } from "@/components/booking/booking-client";
 
@@ -36,10 +38,21 @@ export default async function BookingPage({ params }: Props) {
   const availableDates = await getAvailableDates(tenant.id, services[0].id);
 
   return (
-    <BookingClient
-      tenant={tenant}
-      services={services}
-      availableDates={availableDates}
-    />
+    <>
+      <BookingClient
+        tenant={tenant}
+        services={services}
+        availableDates={availableDates}
+      />
+      <div className="fixed bottom-4 right-4">
+        <Link
+          href={`/book/${slug}/chat`}
+          className="flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white shadow-lg hover:bg-[var(--accent-hover)] transition-colors"
+        >
+          <Bot className="h-4 w-4" />
+          Chat with AI
+        </Link>
+      </div>
+    </>
   );
 }
