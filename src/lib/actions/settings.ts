@@ -213,3 +213,71 @@ export async function updateAISettings(
     return { error: "Failed to update AI settings" };
   }
 }
+
+// ─── WhatsApp ─────────────────────────────────────────────────────────────────
+
+const whatsappSchema = z.object({
+  tenantId: z.string(),
+  whatsappPhoneNumberId: z.string().min(1, "Phone Number ID is required"),
+  whatsappAccessToken: z.string().min(1, "Access token is required"),
+});
+
+export async function updateWhatsappSettings(
+  _prev: SettingsState,
+  formData: FormData
+): Promise<SettingsState> {
+  const raw = {
+    tenantId: formData.get("tenantId"),
+    whatsappPhoneNumberId: formData.get("whatsappPhoneNumberId"),
+    whatsappAccessToken: formData.get("whatsappAccessToken"),
+  };
+
+  const parsed = whatsappSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const { tenantId, whatsappPhoneNumberId, whatsappAccessToken } = parsed.data;
+
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { whatsappPhoneNumberId, whatsappAccessToken },
+    });
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { slug: true },
+    });
+
+    revalidatePath(`/${tenant?.slug}/settings/whatsapp`);
+    return { success: true };
+  } catch {
+    return { error: "Phone Number ID is already in use by another account." };
+  }
+}
+
+export async function disconnectWhatsapp(
+  _prev: SettingsState,
+  formData: FormData
+): Promise<SettingsState> {
+  const tenantId = formData.get("tenantId") as string;
+  if (!tenantId) return { error: "Missing tenant" };
+
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { whatsappPhoneNumberId: null, whatsappAccessToken: null },
+    });
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { slug: true },
+    });
+
+    revalidatePath(`/${tenant?.slug}/settings/whatsapp`);
+    return { success: true };
+  } catch {
+    return { error: "Failed to disconnect WhatsApp" };
+  }
+}

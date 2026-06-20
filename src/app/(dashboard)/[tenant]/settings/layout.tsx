@@ -14,6 +14,7 @@ const NAV = [
   { label: "Team Members", segment: "team" },
   { label: "AI Settings", segment: "ai" },
   { label: "Calendar", segment: "calendar" },
+  { label: "WhatsApp", segment: "whatsapp" },
   { label: "Billing", segment: "billing" },
 ] as const;
 
