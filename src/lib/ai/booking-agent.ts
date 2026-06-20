@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getAIProvider, estimateCostUsd } from "./index";
 import type { AIMessage } from "./types";
 import { getAvailableSlots, getAvailableDates } from "@/lib/booking-queries";
+import { queueBookingNotifications } from "@/lib/notifications";
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
@@ -159,6 +160,10 @@ export async function executeBooking(params: BookingParams): Promise<string> {
       data: { customerId: customer.id, updatedAt: new Date() },
     });
   }
+
+  queueBookingNotifications(appointment.id).catch((err) =>
+    console.error("[booking-agent] failed to queue notifications:", err)
+  );
 
   return appointment.id;
 }
