@@ -128,6 +128,13 @@ model Tenant {
   createdAt      DateTime       @default(now())
   deletedAt      DateTime?
 
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  planStatus           String?
+  planCurrentPeriodEnd DateTime?
+  trialEndsAt          DateTime?
+
   members              TenantMember[]
   services             Service[]
   appointments         Appointment[]
