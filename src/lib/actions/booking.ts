@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { queueBookingNotifications } from "@/lib/notifications";
+import { pushAppointmentSync } from "@/lib/calendar/sync";
 
 const bookingSchema = z.object({
   tenantId: z.string(),
@@ -92,9 +93,12 @@ export async function createBooking(
     select: { id: true },
   });
 
-  // Fire-and-forget: queue confirmation + reminder emails
+  // Fire-and-forget: email notifications + calendar sync
   queueBookingNotifications(appointment.id).catch((err) =>
     console.error("[booking] failed to queue notifications:", err)
+  );
+  pushAppointmentSync(appointment.id).catch((err) =>
+    console.error("[booking] failed to push to calendar:", err)
   );
 
   return { appointmentId: appointment.id };

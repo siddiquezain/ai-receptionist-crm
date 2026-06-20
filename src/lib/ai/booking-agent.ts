@@ -3,6 +3,7 @@ import { getAIProvider, estimateCostUsd } from "./index";
 import type { AIMessage } from "./types";
 import { getAvailableSlots, getAvailableDates } from "@/lib/booking-queries";
 import { queueBookingNotifications } from "@/lib/notifications";
+import { pushAppointmentSync } from "@/lib/calendar/sync";
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
@@ -163,6 +164,9 @@ export async function executeBooking(params: BookingParams): Promise<string> {
 
   queueBookingNotifications(appointment.id).catch((err) =>
     console.error("[booking-agent] failed to queue notifications:", err)
+  );
+  pushAppointmentSync(appointment.id).catch((err) =>
+    console.error("[booking-agent] failed to push to calendar:", err)
   );
 
   return appointment.id;

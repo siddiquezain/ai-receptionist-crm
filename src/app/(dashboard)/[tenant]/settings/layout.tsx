@@ -13,6 +13,7 @@ const NAV = [
   { label: "Working Hours", segment: "working-hours" },
   { label: "Team Members", segment: "team" },
   { label: "AI Settings", segment: "ai" },
+  { label: "Calendar", segment: "calendar" },
   { label: "Billing", segment: "billing" },
 ] as const;
 
