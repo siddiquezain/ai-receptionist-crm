@@ -1,168 +1,139 @@
+/**
+ * WhatsApp webhook — transitional shim.
+ *
+ * TARGET ARCHITECTURE:
+ *   Evolution API ──webhook──► n8n (configure this in Evolution API instance settings)
+ *   Next.js is NOT in this path.
+ *
+ * CURRENT (pre-n8n) BEHAVIOR:
+ *   Evolution API ──webhook──► this route
+ *     ├── N8N_WHATSAPP_WEBHOOK_URL set → forward raw payload to n8n, return 200
+ *     └── not set → run local booking-agent (dev/fallback)
+ *
+ * Once your n8n workflow is live, point Evolution API directly at n8n and
+ * remove this route (or leave it as a dead stub — it won't receive traffic).
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runBookingAgent } from "@/lib/ai/booking-agent";
-import { sendWhatsAppMessage, markWhatsAppMessageRead } from "@/lib/whatsapp";
+import { sendEvolutionMessage, parseEvolutionWebhook } from "@/lib/whatsapp";
+import { n8nForwardWhatsapp } from "@/lib/n8n";
 
-// ── Meta webhook verification ─────────────────────────────────────────────────
-
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
-  const challenge = searchParams.get("hub.challenge");
-
-  if (mode !== "subscribe" || !token || !challenge) {
-    return new NextResponse("Bad Request", { status: 400 });
-  }
-
-  // Accept verification from any tenant whose phone number ID verify token matches,
-  // or fall back to the global env var.
-  const globalToken = process.env.WHATSAPP_VERIFY_TOKEN;
-  if (globalToken && token === globalToken) {
-    return new NextResponse(challenge, { status: 200 });
-  }
-
-  return new NextResponse("Forbidden", { status: 403 });
-}
-
-// ── Incoming message handler ───────────────────────────────────────────────────
-
-interface WaTextMessage {
-  id: string;
-  from: string;
-  type: string;
-  text?: { body: string };
-}
-
-interface WaValue {
-  messaging_product: string;
-  metadata: { phone_number_id: string };
-  messages?: WaTextMessage[];
-}
-
-interface WaChange {
-  field: string;
-  value: WaValue;
-}
-
-interface WaEntry {
-  id: string;
-  changes: WaChange[];
-}
-
-interface WaWebhookPayload {
-  object: string;
-  entry: WaEntry[];
+// Evolution API doesn't use Meta's GET challenge-response.
+// Keep a simple health-check GET so the URL is easy to verify.
+export async function GET() {
+  return NextResponse.json({ ok: true, service: "whatsapp-webhook" });
 }
 
 export async function POST(request: NextRequest) {
-  let body: WaWebhookPayload;
+  // Validate the Evolution API webhook secret.
+  // Evolution API sends the configured API key in the "apikey" header.
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  if (secret) {
+    const incomingKey = request.headers.get("apikey");
+    if (incomingKey !== secret) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+  }
+
+  let body: unknown;
   try {
-    body = (await request.json()) as WaWebhookPayload;
+    body = await request.json();
   } catch {
     return new NextResponse("Bad Request", { status: 400 });
   }
 
-  if (body.object !== "whatsapp_business_account") {
+  // ── Primary path: forward to n8n ─────────────────────────────────────────
+  const forwarded = await n8nForwardWhatsapp(body);
+  if (forwarded) {
     return NextResponse.json({ ok: true });
   }
 
-  // Process each entry / change asynchronously — respond to Meta immediately.
-  processWebhook(body).catch((err) =>
-    console.error("[whatsapp/webhook] processing error:", err)
+  // ── Fallback: local booking-agent ─────────────────────────────────────────
+  const msg = parseEvolutionWebhook(body);
+  if (!msg) {
+    // Not a text message or not a supported event — acknowledge and ignore
+    return NextResponse.json({ ok: true });
+  }
+
+  // Process asynchronously so we return 200 to Evolution API immediately
+  processLocally(msg).catch((err) =>
+    console.error("[whatsapp/webhook] local processing error:", err)
   );
 
   return NextResponse.json({ ok: true });
 }
 
-async function processWebhook(payload: WaWebhookPayload) {
-  for (const entry of payload.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      if (change.field !== "messages") continue;
+// ── Local fallback processing ─────────────────────────────────────────────────
 
-      const phoneNumberId = change.value.metadata?.phone_number_id;
-      if (!phoneNumberId) continue;
+async function processLocally(msg: ReturnType<typeof parseEvolutionWebhook> & {}) {
+  if (!msg) return;
 
-      const messages = change.value.messages ?? [];
-      for (const msg of messages) {
-        if (msg.type !== "text" || !msg.text?.body) continue;
+  // Find tenant by Evolution API instance name
+  const tenant = await prisma.tenant.findFirst({
+    where: {
+      evolutionInstanceName: msg.instanceName,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      evolutionInstanceName: true,
+      evolutionApiKey: true,
+      evolutionApiUrl: true,
+    },
+  });
 
-        const from = msg.from; // sender's WhatsApp number
-        const text = msg.text.body;
+  if (!tenant?.evolutionApiKey) {
+    console.warn(`[whatsapp/webhook] no tenant found for instance="${msg.instanceName}"`);
+    return;
+  }
 
-        // Find tenant by phone number ID
-        const tenant = await prisma.tenant.findFirst({
-          where: {
-            whatsappPhoneNumberId: phoneNumberId,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-            whatsappPhoneNumberId: true,
-            whatsappAccessToken: true,
-          },
-        });
+  // Find existing open conversation for this sender
+  const existingConversation = await prisma.conversation.findFirst({
+    where: {
+      tenantId: tenant.id,
+      channel: "WHATSAPP",
+      externalId: msg.from,
+      status: "OPEN",
+      deletedAt: null,
+    },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
 
-        if (!tenant?.whatsappAccessToken) {
-          console.warn(`[whatsapp/webhook] no tenant found for phone_number_id=${phoneNumberId}`);
-          continue;
-        }
+  try {
+    const result = await runBookingAgent({
+      tenantId: tenant.id,
+      conversationId: existingConversation?.id,
+      userMessage: msg.text,
+      channel: "WHATSAPP",
+    });
 
-        // Find existing open WhatsApp conversation for this sender
-        const existingConversation = await prisma.conversation.findFirst({
-          where: {
-            tenantId: tenant.id,
-            channel: "WHATSAPP",
-            externalId: from,
-            status: "OPEN",
-            deletedAt: null,
-          },
-          select: { id: true },
-          orderBy: { createdAt: "desc" },
-        });
-
-        try {
-          // Mark as read first (non-blocking)
-          markWhatsAppMessageRead(
-            tenant.whatsappPhoneNumberId!,
-            tenant.whatsappAccessToken,
-            msg.id
-          ).catch(() => undefined);
-
-          const result = await runBookingAgent({
-            tenantId: tenant.id,
-            conversationId: existingConversation?.id,
-            userMessage: text,
-            channel: "WHATSAPP",
-          });
-
-          // Store the sender's WhatsApp number on the conversation for continuity
-          if (!existingConversation) {
-            await prisma.conversation.update({
-              where: { id: result.conversationId },
-              data: { externalId: from },
-            });
-          }
-
-          // Send reply back via WhatsApp
-          await sendWhatsAppMessage(
-            tenant.whatsappPhoneNumberId!,
-            tenant.whatsappAccessToken,
-            from,
-            result.reply
-          );
-        } catch (err) {
-          console.error(`[whatsapp/webhook] agent error for tenant=${tenant.id}:`, err);
-
-          // Best-effort fallback message
-          sendWhatsAppMessage(
-            tenant.whatsappPhoneNumberId!,
-            tenant.whatsappAccessToken,
-            from,
-            "Sorry, I'm having trouble right now. Please try again in a moment."
-          ).catch(() => undefined);
-        }
-      }
+    // Store sender's number on conversation for continuity
+    if (!existingConversation) {
+      await prisma.conversation.update({
+        where: { id: result.conversationId },
+        data: { externalId: msg.from },
+      });
     }
+
+    await sendEvolutionMessage(
+      tenant.evolutionInstanceName!,
+      tenant.evolutionApiKey!,
+      msg.from,
+      result.reply,
+      tenant.evolutionApiUrl
+    );
+  } catch (err) {
+    console.error(`[whatsapp/webhook] agent error for tenant=${tenant.id}:`, err);
+
+    sendEvolutionMessage(
+      tenant.evolutionInstanceName!,
+      tenant.evolutionApiKey!,
+      msg.from,
+      "Sorry, I'm having trouble right now. Please try again in a moment.",
+      tenant.evolutionApiUrl
+    ).catch(() => undefined);
   }
 }

@@ -1,27 +1,28 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect } from "react";
 import { MessageCircle, CheckCircle, AlertCircle, Copy, Unlink } from "lucide-react";
 import { updateWhatsappSettings, disconnectWhatsapp } from "@/lib/actions/settings";
 import type { SettingsState } from "@/lib/actions/settings";
 
 interface Props {
   tenantId: string;
-  tenantSlug: string;
-  phoneNumberId: string | null;
+  instanceName: string | null;
   isConnected: boolean;
   appUrl: string;
 }
 
 const initial: SettingsState = {};
 
-export function WhatsappPanel({ tenantId, tenantSlug, phoneNumberId, isConnected, appUrl }: Props) {
+export function WhatsappPanel({ tenantId, instanceName, isConnected, appUrl }: Props) {
   const [saveState, saveAction, saving] = useActionState(updateWhatsappSettings, initial);
   const [disconnectState, disconnectAction, disconnecting] = useActionState(disconnectWhatsapp, initial);
-  const copyRef = useRef<HTMLInputElement>(null);
 
-  const webhookUrl = `${appUrl}/api/whatsapp/webhook`;
-  const verifyToken = process.env.NEXT_PUBLIC_WHATSAPP_VERIFY_TOKEN ?? "appointease-verify";
+  // n8n target URL that Evolution API should be configured to call
+  const n8nWebhookNote = "Configure your Evolution API instance to send webhook events directly to your n8n workflow URL.";
+  // Fallback URL (Next.js shim — used when n8n is not yet set up)
+  const fallbackWebhookUrl = `${appUrl}/api/whatsapp/webhook`;
+  const verifyToken = process.env.NEXT_PUBLIC_WHATSAPP_VERIFY_TOKEN ?? "not-used-for-evolution-api";
 
   useEffect(() => {
     if (saveState.success || disconnectState.success) {
@@ -30,34 +31,46 @@ export function WhatsappPanel({ tenantId, tenantSlug, phoneNumberId, isConnected
   }, [saveState.success, disconnectState.success]);
 
   function copyUrl() {
-    navigator.clipboard.writeText(webhookUrl).catch(() => undefined);
+    navigator.clipboard.writeText(fallbackWebhookUrl).catch(() => undefined);
   }
 
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">WhatsApp Integration</h2>
+        <h2 className="text-base font-semibold text-[var(--text-primary)]">WhatsApp via Evolution API</h2>
         <p className="text-sm text-[var(--text-muted)]">
-          Let customers book appointments by chatting with your AI agent on WhatsApp.
+          Connect your WhatsApp Business number through Evolution API so customers can book via chat.
+          n8n orchestrates the entire conversation flow.
         </p>
       </div>
 
-      {/* Webhook URL */}
+      {/* Architecture note */}
+      <div className="rounded-lg border border-[var(--accent)]/25 bg-[var(--accent)]/5 px-4 py-3 text-xs text-[var(--text-muted)] space-y-1.5">
+        <p className="font-semibold text-[var(--text-primary)]">Architecture</p>
+        <p>• <strong>Production:</strong> Evolution API → n8n → Supabase. No Next.js in the message path.</p>
+        <p>• <strong>Development / fallback:</strong> Evolution API → Next.js fallback webhook → local AI agent.</p>
+        <p>• The credentials below are stored in Supabase for n8n to read when it needs to send outbound messages.</p>
+      </div>
+
+      {/* Webhook configuration */}
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
         <p className="text-sm font-medium text-[var(--text-primary)]">Webhook configuration</p>
         <p className="text-xs text-[var(--text-muted)]">
-          In your Meta for Developers app, set the webhook URL and verify token below under
-          <strong> WhatsApp → Configuration → Webhook</strong>. Subscribe to the{" "}
-          <code className="rounded bg-[var(--bg)] px-1 py-0.5">messages</code> field.
+          In your Evolution API instance settings, set the webhook URL to your <strong>n8n workflow webhook URL</strong>.
+          {" "}Subscribe to the <code className="rounded bg-[var(--bg)] px-1 py-0.5">MESSAGES_UPSERT</code> event.
+        </p>
+        <p className="text-xs text-[var(--text-muted)]">
+          {n8nWebhookNote}
         </p>
 
         <div>
-          <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Webhook URL</label>
+          <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+            Fallback webhook URL (Next.js — dev only)
+          </label>
           <div className="flex items-center gap-2">
             <input
-              ref={copyRef}
               readOnly
-              value={webhookUrl}
+              value={fallbackWebhookUrl}
               className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm font-mono text-[var(--text-primary)] focus:outline-none"
             />
             <button
@@ -69,27 +82,21 @@ export function WhatsappPanel({ tenantId, tenantSlug, phoneNumberId, isConnected
               Copy
             </button>
           </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Verify Token</label>
-          <input
-            readOnly
-            value={verifyToken}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm font-mono text-[var(--text-primary)] focus:outline-none"
-          />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Use this URL only during development. Replace with your n8n webhook URL in production.
+          </p>
         </div>
       </div>
 
       {/* Connected status */}
-      {isConnected && phoneNumberId && (
+      {isConnected && instanceName && (
         <div className="flex items-center gap-3 rounded-xl border border-[var(--success)]/30 bg-[var(--success)]/8 px-4 py-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--success)]/15">
             <MessageCircle className="h-4 w-4 text-[var(--success)]" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[var(--text-primary)]">WhatsApp connected</p>
-            <p className="text-xs text-[var(--text-muted)] truncate">Phone Number ID: {phoneNumberId}</p>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Evolution API connected</p>
+            <p className="text-xs text-[var(--text-muted)] truncate">Instance: {instanceName}</p>
           </div>
           <form action={disconnectAction}>
             <input type="hidden" name="tenantId" value={tenantId} />
@@ -112,44 +119,63 @@ export function WhatsappPanel({ tenantId, tenantSlug, phoneNumberId, isConnected
         </div>
       )}
 
-      {/* Connect / update form */}
+      {/* Credentials form */}
       <form action={saveAction} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
         <p className="text-sm font-medium text-[var(--text-primary)]">
-          {isConnected ? "Update credentials" : "Connect WhatsApp"}
+          {isConnected ? "Update Evolution API credentials" : "Connect Evolution API"}
+        </p>
+        <p className="text-xs text-[var(--text-muted)]">
+          These credentials are stored in Supabase. n8n reads them to send outbound WhatsApp messages on your behalf.
         </p>
 
         <input type="hidden" name="tenantId" value={tenantId} />
 
         <div>
           <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-            Phone Number ID
+            Instance Name
           </label>
           <input
-            name="whatsappPhoneNumberId"
+            name="evolutionInstanceName"
             type="text"
-            placeholder="e.g. 123456789012345"
-            defaultValue={phoneNumberId ?? ""}
+            placeholder="e.g. my-business"
+            defaultValue={instanceName ?? ""}
             required
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Found in Meta for Developers → WhatsApp → API Setup.
+            The instance name you created in Evolution API.
           </p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-            Permanent Access Token
+            API Key
           </label>
           <input
-            name="whatsappAccessToken"
+            name="evolutionApiKey"
             type="password"
-            placeholder={isConnected ? "Enter new token to update" : "EAAxxxxxxxxx…"}
+            placeholder={isConnected ? "Enter new API key to update" : "Your Evolution API key"}
             required
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Generate a permanent system user token in Meta Business Suite — temporary tokens expire in 24 hours.
+            The API key for your Evolution API instance. Found in your Evolution API admin panel.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+            Evolution API Server URL
+            <span className="ml-1.5 text-[var(--text-muted)] font-normal">(optional)</span>
+          </label>
+          <input
+            name="evolutionApiUrl"
+            type="url"
+            placeholder={`Default: ${process.env.NEXT_PUBLIC_EVOLUTION_API_URL ?? "EVOLUTION_API_URL env var"}`}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Leave blank to use the global <code>EVOLUTION_API_URL</code> env var. Set per-tenant only for multi-server setups.
           </p>
         </div>
 
@@ -172,18 +198,9 @@ export function WhatsappPanel({ tenantId, tenantSlug, phoneNumberId, isConnected
           disabled={saving}
           className="rounded-lg bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors"
         >
-          {saving ? "Saving…" : isConnected ? "Update" : "Connect WhatsApp"}
+          {saving ? "Saving…" : isConnected ? "Update" : "Connect"}
         </button>
       </form>
-
-      {/* How it works */}
-      <div className="rounded-lg bg-[var(--bg)] border border-[var(--border)] px-4 py-3 text-xs text-[var(--text-muted)] space-y-1.5">
-        <p className="font-semibold text-[var(--text-primary)]">How it works</p>
-        <p>• Customers send a WhatsApp message to your business number.</p>
-        <p>• AppointEase&apos;s AI agent replies, checks availability, and books the appointment.</p>
-        <p>• Conversations are logged in the Inbox with full history.</p>
-        <p>• Email reminders and calendar sync work automatically — just like web bookings.</p>
-      </div>
     </div>
   );
 }

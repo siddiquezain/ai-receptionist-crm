@@ -135,8 +135,9 @@ model Tenant {
   planCurrentPeriodEnd DateTime?
   trialEndsAt          DateTime?
 
-  whatsappPhoneNumberId String?   @unique
-  whatsappAccessToken   String?
+  evolutionInstanceName String?   @unique
+  evolutionApiKey       String?
+  evolutionApiUrl       String?
 
   members              TenantMember[]
   services             Service[]

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { runBookingAgent } from "@/lib/ai/booking-agent";
+import { n8nChat } from "@/lib/n8n";
 
 const requestSchema = z.object({
   tenantId: z.string().min(1),
@@ -28,7 +29,6 @@ export async function POST(request: NextRequest) {
 
   const { tenantId, conversationId, message, channel } = parsed.data;
 
-  // Verify tenant exists and is not deleted
   const tenant = await prisma.tenant.findFirst({
     where: { id: tenantId, deletedAt: null },
     select: { id: true },
@@ -38,6 +38,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // ── Primary path: delegate to n8n if configured ───────────────────────
+    const n8nResult = await n8nChat({
+      tenantId,
+      conversationId,
+      message,
+      channel: channel ?? "WEB_CHAT",
+    });
+    if (n8nResult) {
+      return NextResponse.json(n8nResult);
+    }
+
+    // ── Fallback: local booking-agent ─────────────────────────────────────
     const result = await runBookingAgent({
       tenantId,
       conversationId,

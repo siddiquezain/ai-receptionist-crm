@@ -18,8 +18,9 @@ export default async function WhatsappSettingsPage({ params }: Props) {
     select: {
       id: true,
       slug: true,
-      whatsappPhoneNumberId: true,
-      whatsappAccessToken: true,
+      evolutionInstanceName: true,
+      evolutionApiKey: true,
+      evolutionApiUrl: true,
     },
   });
   if (!tenant) redirect("/login");
@@ -29,21 +30,20 @@ export default async function WhatsappSettingsPage({ params }: Props) {
   const proto = host.startsWith("localhost") ? "http" : "https";
   const appUrl = `${proto}://${host}`;
 
-  const isConnected = !!(tenant.whatsappPhoneNumberId && tenant.whatsappAccessToken);
+  const isConnected = !!(tenant.evolutionInstanceName && tenant.evolutionApiKey);
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-semibold text-[var(--text-primary)]">WhatsApp</h2>
         <p className="text-sm text-[var(--text-muted)]">
-          Connect your WhatsApp Business number so customers can book via chat.
+          Connect your WhatsApp Business number via Evolution API so customers can book via chat.
         </p>
       </div>
 
       <WhatsappPanel
         tenantId={tenant.id}
-        tenantSlug={tenant.slug}
-        phoneNumberId={tenant.whatsappPhoneNumberId}
+        instanceName={tenant.evolutionInstanceName}
         isConnected={isConnected}
         appUrl={appUrl}
       />

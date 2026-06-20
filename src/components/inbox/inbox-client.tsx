@@ -58,7 +58,12 @@ export function InboxClient({
   const [dismissedDraftId, setDismissedDraftId] = useState<string | null>(null);
   const [takingOver, setTakingOver] = useState(false);
 
-  // Sync props → state on server re-render (conversation switch)
+  // Sync conversation list when server re-renders (e.g. after router.refresh())
+  useEffect(() => {
+    setConversations(initialConversations);
+  }, [initialConversations]);
+
+  // Sync thread when conversation changes
   useEffect(() => {
     setMessages(initialMessages);
     setSelectedConversation(initialSelectedConversation);
@@ -171,6 +176,40 @@ export function InboxClient({
       supabase.removeChannel(channel);
     };
   }, [tenantId, selectedConversationId]);
+
+  // ── Realtime: new conversations created by n8n ────────────────────────────
+  // When n8n receives a WhatsApp message and creates a new Conversation in
+  // Supabase, router.refresh() re-fetches the server component so the new
+  // conversation appears in the list without a manual page reload.
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`new-conversations-${tenantId}`)
+      .on(
+        "postgres_changes" as Parameters<
+          ReturnType<typeof supabase.channel>["on"]
+        >[0],
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "Conversation",
+          filter: `tenantId=eq.${tenantId}`,
+        },
+        () => {
+          // Refresh the server component to get the new conversation with
+          // its customer name and last message (can't derive those from the
+          // raw DB row without additional queries).
+          startTransition(() => {
+            router.refresh();
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId]);
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   function selectConversation(id: string) {

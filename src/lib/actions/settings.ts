@@ -214,12 +214,13 @@ export async function updateAISettings(
   }
 }
 
-// ─── WhatsApp ─────────────────────────────────────────────────────────────────
+// ─── WhatsApp / Evolution API ─────────────────────────────────────────────────
 
 const whatsappSchema = z.object({
   tenantId: z.string(),
-  whatsappPhoneNumberId: z.string().min(1, "Phone Number ID is required"),
-  whatsappAccessToken: z.string().min(1, "Access token is required"),
+  evolutionInstanceName: z.string().min(1, "Instance name is required"),
+  evolutionApiKey: z.string().min(1, "API key is required"),
+  evolutionApiUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
 });
 
 export async function updateWhatsappSettings(
@@ -228,8 +229,9 @@ export async function updateWhatsappSettings(
 ): Promise<SettingsState> {
   const raw = {
     tenantId: formData.get("tenantId"),
-    whatsappPhoneNumberId: formData.get("whatsappPhoneNumberId"),
-    whatsappAccessToken: formData.get("whatsappAccessToken"),
+    evolutionInstanceName: formData.get("evolutionInstanceName"),
+    evolutionApiKey: formData.get("evolutionApiKey"),
+    evolutionApiUrl: formData.get("evolutionApiUrl") || undefined,
   };
 
   const parsed = whatsappSchema.safeParse(raw);
@@ -237,12 +239,16 @@ export async function updateWhatsappSettings(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { tenantId, whatsappPhoneNumberId, whatsappAccessToken } = parsed.data;
+  const { tenantId, evolutionInstanceName, evolutionApiKey, evolutionApiUrl } = parsed.data;
 
   try {
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { whatsappPhoneNumberId, whatsappAccessToken },
+      data: {
+        evolutionInstanceName,
+        evolutionApiKey,
+        evolutionApiUrl: evolutionApiUrl || null,
+      },
     });
 
     const tenant = await prisma.tenant.findUnique({
@@ -253,7 +259,7 @@ export async function updateWhatsappSettings(
     revalidatePath(`/${tenant?.slug}/settings/whatsapp`);
     return { success: true };
   } catch {
-    return { error: "Phone Number ID is already in use by another account." };
+    return { error: "Instance name is already in use by another account." };
   }
 }
 
@@ -267,7 +273,7 @@ export async function disconnectWhatsapp(
   try {
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { whatsappPhoneNumberId: null, whatsappAccessToken: null },
+      data: { evolutionInstanceName: null, evolutionApiKey: null, evolutionApiUrl: null },
     });
 
     const tenant = await prisma.tenant.findUnique({

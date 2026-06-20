@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { n8nSendReply } from "@/lib/n8n";
 
 export type ActionResult = { success: boolean; error?: string };
 
@@ -16,10 +17,33 @@ export async function sendMessage(
 
   const conv = await prisma.conversation.findFirst({
     where: { id: conversationId, tenantId },
-    select: { id: true },
+    select: { id: true, channel: true, externalId: true },
   });
   if (!conv) return { success: false, error: "Conversation not found" };
 
+  // ── Primary path: delegate to n8n for WHATSAPP channels ─────────────────
+  // n8n handles both: writing the Message to Supabase AND sending via Evolution API.
+  // For WEB_CHAT, n8n is optional — the DB write below is sufficient.
+  if (conv.channel === "WHATSAPP") {
+    const handled = await n8nSendReply({
+      tenantId,
+      conversationId,
+      content: trimmed,
+      channel: "WHATSAPP",
+      to: conv.externalId,
+    });
+    if (handled) {
+      // n8n wrote the Message row and sent via Evolution API.
+      // Supabase Realtime will push the new message to the Inbox client.
+      revalidatePath(`/${tenantSlug}/inbox`);
+      return { success: true };
+    }
+    // n8n not configured — fall through to DB-only write.
+    // The message will appear in the Inbox but won't be delivered via WhatsApp.
+    // This is the expected pre-n8n behaviour.
+  }
+
+  // ── Fallback: write directly to DB ───────────────────────────────────────
   try {
     await prisma.message.create({
       data: {
@@ -29,7 +53,6 @@ export async function sendMessage(
         isDraft: false,
       },
     });
-    // Update updatedAt so conversation re-sorts to top of list
     await prisma.conversation.update({
       where: { id: conversationId },
       data: { updatedAt: new Date() },
