@@ -241,6 +241,162 @@ async function seedBookingScenario(
   return { appointments: apptResult, conversations: convResult, messages: msgResult };
 }
 
+// ─── Cancelled scenario seeder ──────────────────────────────────────────────
+
+async function seedCancelledScenario(tenantId: string, refs: Refs): Promise<ScenarioResult> {
+  const customerId = refs.customers.get("lucas.oliveira@demo.com");
+  const serviceId  = refs.services.get("Consultation");
+  const memberId   = refs.members.get("sarah@demo.com") ?? null;
+  if (!customerId || !serviceId) {
+    fail("seedCancelledScenario: missing refs");
+    return { appointments: { created: 0, skipped: 0 }, conversations: { created: 0, skipped: 0 }, messages: { created: 0, skipped: 0 } };
+  }
+
+  const apptStart   = daysAgo(17, 14);
+  const apptEnd     = minutesAfter(apptStart, 30);
+  const convStart   = daysAgo(18, 10);
+  const cancelledAt = daysAgo(17, 9);
+
+  const apptResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingAppt] = await sql`
+    SELECT id FROM "Appointment"
+    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+    LIMIT 1
+  `;
+  let apptId: string;
+  if (existingAppt) {
+    apptId = existingAppt.id as string; apptResult.skipped++;
+  } else {
+    apptId = cuid();
+    await sql`
+      INSERT INTO "Appointment"
+        (id, "tenantId", "customerId", "serviceId", "teamMemberId",
+         "startAt", "endAt", status, "bookedVia", "cancelledAt", "cancellationReason", "createdAt")
+      VALUES
+        (${apptId}, ${tenantId}, ${customerId}, ${serviceId}, ${memberId},
+         ${apptStart}, ${apptEnd}, 'CANCELLED', 'AI', ${cancelledAt}, 'schedule conflict', ${convStart})
+    `;
+    apptResult.created++;
+  }
+
+  const convResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingConv] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = 'demo-conv-003' LIMIT 1
+  `;
+  let convId: string;
+  if (existingConv) {
+    convId = existingConv.id as string; convResult.skipped++;
+  } else {
+    convId = cuid();
+    await sql`
+      INSERT INTO "Conversation"
+        (id, "tenantId", "customerId", channel, "externalId", status,
+         "aiHandled", "createdAt", "updatedAt")
+      VALUES
+        (${convId}, ${tenantId}, ${customerId}, 'WHATSAPP', 'demo-conv-003', 'RESOLVED',
+         true, ${convStart}, ${cancelledAt})
+    `;
+    await sql`UPDATE "Appointment" SET "conversationId" = ${convId} WHERE id = ${apptId}`;
+    convResult.created++;
+  }
+
+  const messages: MessageInput[] = [
+    { role: "USER",      content: "Hi, I need to cancel my appointment" },
+    { role: "ASSISTANT", content: "Hi there! I can help with that. Could I have your name please?" },
+    { role: "USER",      content: "Lucas Oliveira" },
+    { role: "ASSISTANT", content: "Thanks Lucas. I can see your Consultation scheduled for tomorrow. May I ask why you need to cancel? This helps us improve." },
+    { role: "USER",      content: "I have a schedule conflict, really sorry about that" },
+    { role: "ASSISTANT", content: "No worries at all, Lucas! Your appointment has been cancelled. We hope to see you again soon — just message us whenever you'd like to rebook. 😊" },
+    { role: "SYSTEM",    content: `[Appointment cancelled — reason: schedule conflict — ID: ${apptId}]` },
+    { role: "USER",      content: "Thank you for understanding. I'll rebook soon!" },
+    { role: "ASSISTANT", content: "Sounds great! We'll be here whenever you're ready. Take care! 👋" },
+  ];
+  const msgResult = await seedMessages(convId, messages, convStart);
+
+  ok(`Cancelled scenario (lucas.oliveira@demo.com): done`);
+  return { appointments: apptResult, conversations: convResult, messages: msgResult };
+}
+
+// ─── Reschedule scenario seeder ──────────────────────────────────────────────
+
+async function seedRescheduleScenario(tenantId: string, refs: Refs): Promise<ScenarioResult> {
+  const customerId = refs.customers.get("priya.sharma@demo.com");
+  const serviceId  = refs.services.get("Consultation");
+  const memberId   = refs.members.get("sarah@demo.com") ?? null;
+  if (!customerId || !serviceId) {
+    fail("seedRescheduleScenario: missing refs");
+    return { appointments: { created: 0, skipped: 0 }, conversations: { created: 0, skipped: 0 }, messages: { created: 0, skipped: 0 } };
+  }
+
+  // Original slot was Monday — conversation moved it to Wednesday (upcoming)
+  const apptStart   = daysFromNow(3, 10);
+  const apptEnd     = minutesAfter(apptStart, 30);
+  const convStart   = daysAgo(5, 15);
+  const confirmedAt = daysAgo(5, 16);
+
+  const apptResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingAppt] = await sql`
+    SELECT id FROM "Appointment"
+    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+    LIMIT 1
+  `;
+  let apptId: string;
+  if (existingAppt) {
+    apptId = existingAppt.id as string; apptResult.skipped++;
+  } else {
+    apptId = cuid();
+    await sql`
+      INSERT INTO "Appointment"
+        (id, "tenantId", "customerId", "serviceId", "teamMemberId",
+         "startAt", "endAt", status, "bookedVia", "confirmedAt", "createdAt")
+      VALUES
+        (${apptId}, ${tenantId}, ${customerId}, ${serviceId}, ${memberId},
+         ${apptStart}, ${apptEnd}, 'CONFIRMED', 'AI', ${confirmedAt}, ${convStart})
+    `;
+    apptResult.created++;
+  }
+
+  const convResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingConv] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = 'demo-conv-004' LIMIT 1
+  `;
+  let convId: string;
+  if (existingConv) {
+    convId = existingConv.id as string; convResult.skipped++;
+  } else {
+    convId = cuid();
+    await sql`
+      INSERT INTO "Conversation"
+        (id, "tenantId", "customerId", channel, "externalId", status,
+         "aiHandled", "createdAt", "updatedAt")
+      VALUES
+        (${convId}, ${tenantId}, ${customerId}, 'WHATSAPP', 'demo-conv-004', 'RESOLVED',
+         true, ${convStart}, ${confirmedAt})
+    `;
+    await sql`UPDATE "Appointment" SET "conversationId" = ${convId} WHERE id = ${apptId}`;
+    convResult.created++;
+  }
+
+  const messages: MessageInput[] = [
+    { role: "USER",      content: "Hi, I have an appointment booked for Monday but need to change the day" },
+    { role: "ASSISTANT", content: "Hi there! Happy to help with rescheduling. Could I have your name?" },
+    { role: "USER",      content: "Priya Sharma" },
+    { role: "ASSISTANT", content: "Hi Priya! I can see your Consultation on Monday. What day works better for you?" },
+    { role: "USER",      content: "Could I move it to Wednesday instead? Same time if possible" },
+    { role: "ASSISTANT", content: "Wednesday at 10:00 AM works perfectly. To confirm the change:\n\n📅 *Consultation* – 30 min\n📆 Wednesday at 10:00 AM\n👤 Priya Sharma\n\nShall I update your booking?" },
+    { role: "USER",      content: "Yes please, that's great" },
+    { role: "ASSISTANT", content: "Done! ✅ Your appointment has been moved to Wednesday at 10:00 AM. See you then, Priya!" },
+    { role: "SYSTEM",    content: `[Appointment rescheduled to Wednesday 10:00 AM — ID: ${apptId}]` },
+    { role: "USER",      content: "Perfect, thank you!" },
+  ];
+  const msgResult = await seedMessages(convId, messages, convStart);
+
+  ok(`Reschedule scenario (priya.sharma@demo.com): done`);
+  return { appointments: apptResult, conversations: convResult, messages: msgResult };
+}
+
 // ─── Main (skeleton — scenarios added in later tasks) ────────────────────────
 
 async function main() {
@@ -278,6 +434,8 @@ async function main() {
 
   add(await seedBookingScenario(tenantId, refs, 1));
   add(await seedBookingScenario(tenantId, refs, 2));
+  add(await seedCancelledScenario(tenantId, refs));
+  add(await seedRescheduleScenario(tenantId, refs));
 
   const pad = (n: number) => String(n).padEnd(8);
   console.log("\n─── Demo Seed Summary ──────────────────────────────────────────────");
