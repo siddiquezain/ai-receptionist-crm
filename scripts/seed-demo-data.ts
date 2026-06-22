@@ -538,6 +538,86 @@ async function seedFollowUpScenario(tenantId: string, refs: Refs): Promise<Scena
   return { appointments: apptResult, conversations: convResult, messages: msgResult };
 }
 
+// ─── Active booking scenario seeder ────────────────────────────────────────
+
+async function seedActiveBookingScenario(tenantId: string, refs: Refs): Promise<ScenarioResult> {
+  const customerId = refs.customers.get("emma.thompson@demo.com");
+  const serviceId  = refs.services.get("Premium Consultation");
+  const memberId   = refs.members.get("sarah@demo.com") ?? null;
+  if (!customerId || !serviceId) {
+    fail("seedActiveBookingScenario: missing refs");
+    return { appointments: { created: 0, skipped: 0 }, conversations: { created: 0, skipped: 0 }, messages: { created: 0, skipped: 0 } };
+  }
+
+  // Appointment tentatively held — pending confirmation
+  const apptStart = daysFromNow(2, 14);
+  const apptEnd   = minutesAfter(apptStart, 60);
+  const convStart = daysAgo(0, 9);    // started this morning
+
+  const apptResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingAppt] = await sql`
+    SELECT id FROM "Appointment"
+    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+    LIMIT 1
+  `;
+  let apptId: string;
+  if (existingAppt) {
+    apptId = existingAppt.id as string; apptResult.skipped++;
+  } else {
+    apptId = cuid();
+    await sql`
+      INSERT INTO "Appointment"
+        (id, "tenantId", "customerId", "serviceId", "teamMemberId",
+         "startAt", "endAt", status, "bookedVia", "createdAt")
+      VALUES
+        (${apptId}, ${tenantId}, ${customerId}, ${serviceId}, ${memberId},
+         ${apptStart}, ${apptEnd}, 'PENDING', 'AI', ${convStart})
+    `;
+    apptResult.created++;
+  }
+
+  const convResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingConv] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = 'demo-conv-008' LIMIT 1
+  `;
+  let convId: string;
+  if (existingConv) {
+    convId = existingConv.id as string; convResult.skipped++;
+  } else {
+    convId = cuid();
+    await sql`
+      INSERT INTO "Conversation"
+        (id, "tenantId", "customerId", channel, "externalId", status,
+         "aiHandled", "createdAt", "updatedAt")
+      VALUES
+        (${convId}, ${tenantId}, ${customerId}, 'WHATSAPP', 'demo-conv-008', 'OPEN',
+         true, ${convStart}, ${minutesAfter(convStart, 14)})
+    `;
+    await sql`UPDATE "Appointment" SET "conversationId" = ${convId} WHERE id = ${apptId}`;
+    convResult.created++;
+  }
+
+  // Conversation is mid-flow — AI is waiting for Emma's confirmation
+  const messages: MessageInput[] = [
+    { role: "USER",      content: "Hello, can I book an appointment?" },
+    { role: "ASSISTANT", content: "Hi there! Welcome to Demo Business. I'd be happy to help you book. What's your name?" },
+    { role: "USER",      content: "Emma Thompson" },
+    { role: "ASSISTANT", content: "Hi Emma! Nice to meet you. We have two services:\n\n• *Consultation* – 30 min ($50)\n• *Premium Consultation* – 60 min ($100)\n\nWhich would you like?" },
+    { role: "USER",      content: "The premium one please, I need more time to go through everything" },
+    { role: "ASSISTANT", content: "Great choice! Premium Consultation – 60 minutes at $100. We're open Monday–Saturday, 9:00 AM–6:00 PM.\n\nWhat date works for you?" },
+    { role: "USER",      content: "What about this Friday?" },
+    { role: "ASSISTANT", content: "Friday works! I have the following times available:\n\n• 9:00 AM\n• 11:00 AM\n• 2:00 PM\n• 4:00 PM\n\nWhich time would you prefer, Emma?" },
+    { role: "USER",      content: "2pm please" },
+    { role: "ASSISTANT", content: "Perfect! Just to confirm:\n\n📅 *Premium Consultation* – 60 min\n📆 Friday at 2:00 PM\n👤 Emma Thompson\n💰 $100\n\nShall I go ahead and book this for you?" },
+  ];
+  // Conversation ends here — waiting for Emma's reply. Status remains OPEN.
+  const msgResult = await seedMessages(convId, messages, convStart);
+
+  ok(`Active booking scenario (emma.thompson@demo.com): OPEN — awaiting customer reply`);
+  return { appointments: apptResult, conversations: convResult, messages: msgResult };
+}
+
 // ─── Main (skeleton — scenarios added in later tasks) ────────────────────────
 
 async function main() {
@@ -580,6 +660,7 @@ async function main() {
   add(await seedInfoScenario(tenantId, refs, 1));
   add(await seedInfoScenario(tenantId, refs, 2));
   add(await seedFollowUpScenario(tenantId, refs));
+  add(await seedActiveBookingScenario(tenantId, refs));
 
   const pad = (n: number) => String(n).padEnd(8);
   console.log("\n─── Demo Seed Summary ──────────────────────────────────────────────");
