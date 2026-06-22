@@ -336,11 +336,25 @@ async function seedRescheduleScenario(tenantId: string, refs: Refs): Promise<Sce
   const confirmedAt = daysAgo(5, 16);
 
   const apptResult: SeedResult = { created: 0, skipped: 0 };
-  const [existingAppt] = await sql`
-    SELECT id FROM "Appointment"
-    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+  // Step 1: Find the conversation by stable externalId
+  const [existingConvForAppt] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = 'demo-conv-004'
     LIMIT 1
   `;
+  // Step 2: If conversation exists, find appointment via its conversationId link;
+  //         otherwise fall back to the floating date (first run only)
+  const [existingAppt] = existingConvForAppt
+    ? await sql`
+        SELECT id FROM "Appointment"
+        WHERE "conversationId" = ${existingConvForAppt.id as string}
+        LIMIT 1
+      `
+    : await sql`
+        SELECT id FROM "Appointment"
+        WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+        LIMIT 1
+      `;
   let apptId: string;
   if (existingAppt) {
     apptId = existingAppt.id as string; apptResult.skipped++;
@@ -555,11 +569,25 @@ async function seedActiveBookingScenario(tenantId: string, refs: Refs): Promise<
   const convStart = daysAgo(0, 9);    // started this morning
 
   const apptResult: SeedResult = { created: 0, skipped: 0 };
-  const [existingAppt] = await sql`
-    SELECT id FROM "Appointment"
-    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+  // Step 1: Find the conversation by stable externalId
+  const [existingConvForAppt] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = 'demo-conv-008'
     LIMIT 1
   `;
+  // Step 2: If conversation exists, find appointment via its conversationId link;
+  //         otherwise fall back to the floating date (first run only)
+  const [existingAppt] = existingConvForAppt
+    ? await sql`
+        SELECT id FROM "Appointment"
+        WHERE "conversationId" = ${existingConvForAppt.id as string}
+        LIMIT 1
+      `
+    : await sql`
+        SELECT id FROM "Appointment"
+        WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+        LIMIT 1
+      `;
   let apptId: string;
   if (existingAppt) {
     apptId = existingAppt.id as string; apptResult.skipped++;
