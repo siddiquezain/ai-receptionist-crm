@@ -618,6 +618,82 @@ async function seedActiveBookingScenario(tenantId: string, refs: Refs): Promise<
   return { appointments: apptResult, conversations: convResult, messages: msgResult };
 }
 
+// ─── Historical appointments seeder ────────────────────────────────────────
+
+async function seedHistoricalAppointments(tenantId: string, refs: Refs): Promise<SeedResult> {
+  const c  = refs.customers;
+  const s  = refs.services;
+  const m  = refs.members.get("sarah@demo.com") ?? null;
+  const cs = s.get("Consultation")!;
+  const ps = s.get("Premium Consultation")!;
+
+  type ApptRow = {
+    customerId: string; serviceId: string; startAt: Date;
+    status: string; cancelledAt?: Date; cancellationReason?: string; confirmedAt?: Date;
+  };
+
+  const appts: ApptRow[] = [
+    // Week -4
+    { customerId: c.get("ahmed.hassan@demo.com")!,    serviceId: ps, startAt: daysAgo(25, 14), status: "COMPLETED" },
+    { customerId: c.get("aisha.patel@demo.com")!,     serviceId: cs, startAt: daysAgo(24, 11), status: "COMPLETED" },
+    { customerId: c.get("nina.kovacs@demo.com")!,     serviceId: cs, startAt: daysAgo(23, 14), status: "CANCELLED",
+      cancelledAt: daysAgo(24, 9), cancellationReason: "personal reasons" },
+    // Week -3
+    { customerId: c.get("carlos.mendez@demo.com")!,   serviceId: ps, startAt: daysAgo(18, 15), status: "COMPLETED" },
+    { customerId: c.get("sarah.williams@demo.com")!,  serviceId: cs, startAt: daysAgo(17, 11), status: "NO_SHOW" },
+    { customerId: c.get("aisha.patel@demo.com")!,     serviceId: ps, startAt: daysAgo(15, 13), status: "COMPLETED" },
+    // Week -2
+    { customerId: c.get("maria.santos@demo.com")!,    serviceId: ps, startAt: daysAgo(11, 10), status: "COMPLETED" },
+    { customerId: c.get("carlos.mendez@demo.com")!,   serviceId: cs, startAt: daysAgo(10, 15), status: "COMPLETED" },
+    { customerId: c.get("michael.torres@demo.com")!,  serviceId: cs, startAt: daysAgo(10, 9),  status: "NO_SHOW" },
+    { customerId: c.get("michael.torres@demo.com")!,  serviceId: ps, startAt: daysAgo(8, 14),  status: "CANCELLED",
+      cancelledAt: daysAgo(9, 10), cancellationReason: "rescheduling" },
+    // Week -1
+    { customerId: c.get("james.chen@demo.com")!,      serviceId: ps, startAt: daysAgo(5, 10),  status: "COMPLETED" },
+    { customerId: c.get("ahmed.hassan@demo.com")!,    serviceId: cs, startAt: daysAgo(5, 14),  status: "COMPLETED" },
+    { customerId: c.get("carlos.mendez@demo.com")!,   serviceId: ps, startAt: daysAgo(3, 13),  status: "COMPLETED" },
+    { customerId: c.get("aisha.patel@demo.com")!,     serviceId: cs, startAt: daysAgo(2, 10),  status: "COMPLETED" },
+    // Upcoming
+    { customerId: c.get("daniel.morrison@demo.com")!, serviceId: cs, startAt: daysFromNow(2, 14), status: "CONFIRMED",
+      confirmedAt: daysAgo(1, 10) },
+    { customerId: c.get("ahmed.hassan@demo.com")!,    serviceId: ps, startAt: daysFromNow(5, 14), status: "CONFIRMED",
+      confirmedAt: daysAgo(2, 11) },
+  ];
+
+  let created = 0, skipped = 0;
+
+  for (const row of appts) {
+    if (!row.customerId || !row.serviceId) continue; // skip if ref missing (guard)
+
+    const endAt = minutesAfter(row.startAt, row.serviceId === ps ? 60 : 30);
+
+    const [existing] = await sql`
+      SELECT id FROM "Appointment"
+      WHERE "tenantId" = ${tenantId}
+        AND "customerId" = ${row.customerId}
+        AND "startAt" = ${row.startAt}
+      LIMIT 1
+    `;
+    if (existing) { skipped++; continue; }
+
+    await sql`
+      INSERT INTO "Appointment"
+        (id, "tenantId", "customerId", "serviceId", "teamMemberId",
+         "startAt", "endAt", status, "bookedVia",
+         "confirmedAt", "cancelledAt", "cancellationReason", "createdAt")
+      VALUES
+        (${cuid()}, ${tenantId}, ${row.customerId}, ${row.serviceId}, ${m},
+         ${row.startAt}, ${endAt}, ${row.status}, 'MANUAL',
+         ${row.confirmedAt ?? null}, ${row.cancelledAt ?? null},
+         ${row.cancellationReason ?? null}, ${minutesAfter(row.startAt, -60)})
+    `;
+    created++;
+  }
+
+  ok(`Historical appointments: ${created} created, ${skipped} skipped`);
+  return { created, skipped };
+}
+
 // ─── Main (skeleton — scenarios added in later tasks) ────────────────────────
 
 async function main() {
@@ -661,6 +737,10 @@ async function main() {
   add(await seedInfoScenario(tenantId, refs, 2));
   add(await seedFollowUpScenario(tenantId, refs));
   add(await seedActiveBookingScenario(tenantId, refs));
+
+  const historicalResult = await seedHistoricalAppointments(tenantId, refs);
+  totals.appointments.created += historicalResult.created;
+  totals.appointments.skipped += historicalResult.skipped;
 
   const pad = (n: number) => String(n).padEnd(8);
   console.log("\n─── Demo Seed Summary ──────────────────────────────────────────────");
