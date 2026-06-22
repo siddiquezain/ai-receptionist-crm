@@ -131,6 +131,116 @@ async function seedCustomers(tenantId: string, refs: Refs): Promise<SeedResult> 
   return { created, skipped };
 }
 
+// ─── Booking scenario seeder ─────────────────────────────────────────────────
+
+async function seedBookingScenario(
+  tenantId: string,
+  refs: Refs,
+  n: 1 | 2,
+): Promise<ScenarioResult> {
+  const config = {
+    1: { email: "maria.santos@demo.com",  service: "Consultation",         extId: "demo-conv-001", daysBack: 25, apptHour: 10, convHour: 9  },
+    2: { email: "james.chen@demo.com",    service: "Consultation",         extId: "demo-conv-002", daysBack: 18, apptHour: 9,  convHour: 8  },
+  }[n];
+
+  const customerId = refs.customers.get(config.email);
+  const serviceId  = refs.services.get(config.service);
+  const memberId   = refs.members.get("sarah@demo.com") ?? null;
+
+  if (!customerId || !serviceId) {
+    fail(`seedBookingScenario(${n}): missing customer or service ref`);
+    return { appointments: { created: 0, skipped: 0 }, conversations: { created: 0, skipped: 0 }, messages: { created: 0, skipped: 0 } };
+  }
+
+  const apptStart = daysAgo(config.daysBack, config.apptHour);
+  const apptEnd   = minutesAfter(apptStart, 30);
+  const convStart = daysAgo(config.daysBack, config.convHour);
+
+  // ── Appointment ──────────────────────────────────────────────────────────
+  const apptResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingAppt] = await sql`
+    SELECT id FROM "Appointment"
+    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+    LIMIT 1
+  `;
+  let apptId: string;
+  if (existingAppt) {
+    apptId = existingAppt.id as string;
+    apptResult.skipped++;
+  } else {
+    apptId = cuid();
+    await sql`
+      INSERT INTO "Appointment"
+        (id, "tenantId", "customerId", "serviceId", "teamMemberId",
+         "startAt", "endAt", status, "bookedVia", "confirmedAt", "createdAt")
+      VALUES
+        (${apptId}, ${tenantId}, ${customerId}, ${serviceId}, ${memberId},
+         ${apptStart}, ${apptEnd}, 'COMPLETED', 'AI', ${convStart}, ${convStart})
+    `;
+    apptResult.created++;
+  }
+
+  // ── Conversation ─────────────────────────────────────────────────────────
+  const convResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingConv] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = ${config.extId}
+    LIMIT 1
+  `;
+  let convId: string;
+  if (existingConv) {
+    convId = existingConv.id as string;
+    convResult.skipped++;
+  } else {
+    convId = cuid();
+    await sql`
+      INSERT INTO "Conversation"
+        (id, "tenantId", "customerId", channel, "externalId", status,
+         "aiHandled", "createdAt", "updatedAt")
+      VALUES
+        (${convId}, ${tenantId}, ${customerId}, 'WHATSAPP', ${config.extId}, 'RESOLVED',
+         true, ${convStart}, ${apptEnd})
+    `;
+    await sql`UPDATE "Appointment" SET "conversationId" = ${convId} WHERE id = ${apptId}`;
+    convResult.created++;
+  }
+
+  // ── Messages ─────────────────────────────────────────────────────────────
+  const msgs1: MessageInput[] = [
+    { role: "USER",      content: "Hi there! I'd like to book an appointment please 😊" },
+    { role: "ASSISTANT", content: "Hello! Welcome to Demo Business. I'd be happy to help you schedule. May I have your name?" },
+    { role: "USER",      content: "Sure, it's Maria Santos" },
+    { role: "ASSISTANT", content: "Hi Maria! We have two services available:\n\n• *Consultation* – 30 min ($50)\n• *Premium Consultation* – 60 min ($100)\n\nWhich would you prefer?" },
+    { role: "USER",      content: "The regular consultation please" },
+    { role: "ASSISTANT", content: "Perfect! The Consultation is 30 minutes at $50. We're open Monday–Saturday, 9:00 AM–6:00 PM.\n\nWhat date and time works best for you?" },
+    { role: "USER",      content: "How about Tuesday at 10am?" },
+    { role: "ASSISTANT", content: "Tuesday at 10:00 AM works! To confirm:\n\n📅 *Consultation* – 30 min\n📆 Tuesday at 10:00 AM\n👤 Maria Santos\n💰 $50\n\nShall I book this?" },
+    { role: "USER",      content: "Yes please!" },
+    { role: "ASSISTANT", content: "Your appointment is confirmed! ✅\n\n📅 Consultation – 30 min\n📆 Tuesday at 10:00 AM\n💰 $50\n\nWe look forward to seeing you, Maria! Reply *CANCEL* if you need to cancel." },
+    { role: "SYSTEM",    content: `[Appointment booked via AI — ID: ${apptId}]` },
+    { role: "USER",      content: "Thank you so much! See you then 👍" },
+  ];
+
+  const msgs2: MessageInput[] = [
+    { role: "USER",      content: "Hello, I need to book an appointment" },
+    { role: "ASSISTANT", content: "Hi there! Welcome to Demo Business. What's your name?" },
+    { role: "USER",      content: "James Chen" },
+    { role: "ASSISTANT", content: "Hi James! Here are our services:\n\n• *Consultation* – 30 min ($50)\n• *Premium Consultation* – 60 min ($100)\n\nWhich would you like?" },
+    { role: "USER",      content: "The consultation please" },
+    { role: "ASSISTANT", content: "Great! Consultation – 30 min at $50. We're available Monday–Saturday, 9:00 AM–6:00 PM.\n\nWhat day and time suits you?" },
+    { role: "USER",      content: "Monday at 9am" },
+    { role: "ASSISTANT", content: "Monday at 9:00 AM — perfect. To confirm:\n\n📅 *Consultation* – 30 min\n📆 Monday at 9:00 AM\n👤 James Chen\n💰 $50\n\nShall I book this?" },
+    { role: "USER",      content: "Yes, go ahead" },
+    { role: "ASSISTANT", content: "Done! ✅\n\nConsultation – Monday at 9:00 AM. We'll see you then, James! Message us anytime if you need to make changes." },
+    { role: "SYSTEM",    content: `[Appointment booked via AI — ID: ${apptId}]` },
+  ];
+
+  const msgResult = await seedMessages(convId, n === 1 ? msgs1 : msgs2, convStart);
+
+  ok(`Booking scenario ${n} (${config.email}): done`);
+  return { appointments: apptResult, conversations: convResult, messages: msgResult };
+}
+
 // ─── Main (skeleton — scenarios added in later tasks) ────────────────────────
 
 async function main() {
@@ -150,13 +260,24 @@ async function main() {
 
   const customerResult = await seedCustomers(tenantId, refs);
 
-  // Scenario results accumulated here — tasks 3–7 add to this
   const totals = {
     customers:     customerResult,
     appointments:  { created: 0, skipped: 0 },
     conversations: { created: 0, skipped: 0 },
     messages:      { created: 0, skipped: 0 },
   };
+
+  function add(r: ScenarioResult) {
+    totals.appointments.created  += r.appointments.created;
+    totals.appointments.skipped  += r.appointments.skipped;
+    totals.conversations.created += r.conversations.created;
+    totals.conversations.skipped += r.conversations.skipped;
+    totals.messages.created      += r.messages.created;
+    totals.messages.skipped      += r.messages.skipped;
+  }
+
+  add(await seedBookingScenario(tenantId, refs, 1));
+  add(await seedBookingScenario(tenantId, refs, 2));
 
   const pad = (n: number) => String(n).padEnd(8);
   console.log("\n─── Demo Seed Summary ──────────────────────────────────────────────");
