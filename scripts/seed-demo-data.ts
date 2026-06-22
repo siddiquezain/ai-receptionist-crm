@@ -397,6 +397,147 @@ async function seedRescheduleScenario(tenantId: string, refs: Refs): Promise<Sce
   return { appointments: apptResult, conversations: convResult, messages: msgResult };
 }
 
+// ─── Informational scenario seeder ──────────────────────────────────────────
+
+async function seedInfoScenario(
+  tenantId: string,
+  refs: Refs,
+  n: 1 | 2,
+): Promise<ScenarioResult> {
+  const config = {
+    1: { email: "sarah.williams@demo.com", extId: "demo-conv-005", daysBack: 20, hour: 11 },
+    2: { email: "michael.torres@demo.com", extId: "demo-conv-006", daysBack: 12, hour: 16 },
+  }[n];
+
+  const customerId = refs.customers.get(config.email);
+  if (!customerId) {
+    fail(`seedInfoScenario(${n}): missing customer ref`);
+    return { appointments: { created: 0, skipped: 0 }, conversations: { created: 0, skipped: 0 }, messages: { created: 0, skipped: 0 } };
+  }
+
+  const convStart = daysAgo(config.daysBack, config.hour);
+
+  const convResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingConv] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = ${config.extId} LIMIT 1
+  `;
+  let convId: string;
+  if (existingConv) {
+    convId = existingConv.id as string; convResult.skipped++;
+  } else {
+    convId = cuid();
+    await sql`
+      INSERT INTO "Conversation"
+        (id, "tenantId", "customerId", channel, "externalId", status,
+         "aiHandled", "createdAt", "updatedAt")
+      VALUES
+        (${convId}, ${tenantId}, ${customerId}, 'WHATSAPP', ${config.extId}, 'RESOLVED',
+         true, ${convStart}, ${minutesAfter(convStart, 20)})
+    `;
+    convResult.created++;
+  }
+
+  const msgs1: MessageInput[] = [
+    { role: "USER",      content: "Hi! What are your opening hours?" },
+    { role: "ASSISTANT", content: "Hello! 👋 Demo Business is open:\n\n📅 Monday–Saturday: 9:00 AM – 6:00 PM\n🚫 Sunday: Closed\n\nIs there anything else I can help you with?" },
+    { role: "USER",      content: "And do you have parking nearby?" },
+    { role: "ASSISTANT", content: "There is street parking available and a public car park just 2 minutes' walk away. When you book, we'll send the full address. Would you like to schedule an appointment?" },
+    { role: "USER",      content: "Maybe next week, I'll think about it" },
+    { role: "ASSISTANT", content: "Of course! We'll be here whenever you're ready. Feel free to message us anytime. Have a great day! 😊" },
+    { role: "USER",      content: "Thanks!" },
+  ];
+
+  const msgs2: MessageInput[] = [
+    { role: "USER",      content: "Hi, I wanted to ask — how much does a consultation cost?" },
+    { role: "ASSISTANT", content: "Hi there! Great question. Here are our services:\n\n💼 *Consultation* – 30 minutes, $50\n⭐ *Premium Consultation* – 60 minutes, $100\n\nThe Premium gives you twice the time for more in-depth discussion. Would you like to book?" },
+    { role: "USER",      content: "What's included in each?" },
+    { role: "ASSISTANT", content: "Both sessions are with our qualified team. The standard Consultation covers your core questions in a focused 30-minute session. The Premium adds a full hour for deeper planning, follow-up questions, and personalised recommendations.\n\nMany clients start with the standard and upgrade after their first visit." },
+    { role: "USER",      content: "That's helpful, I'll consider it" },
+    { role: "ASSISTANT", content: "Take your time! When you're ready just message us and we'll get you booked in right away. 😊" },
+    { role: "USER",      content: "Will do, thanks" },
+    { role: "ASSISTANT", content: "Looking forward to it! Have a great day 👋" },
+  ];
+
+  const msgResult = await seedMessages(convId, n === 1 ? msgs1 : msgs2, convStart);
+
+  ok(`Info scenario ${n} (${config.email}): done`);
+  return { appointments: { created: 0, skipped: 0 }, conversations: convResult, messages: msgResult };
+}
+
+// ─── Follow-up scenario seeder ──────────────────────────────────────────────
+
+async function seedFollowUpScenario(tenantId: string, refs: Refs): Promise<ScenarioResult> {
+  const customerId = refs.customers.get("nina.kovacs@demo.com");
+  const serviceId  = refs.services.get("Premium Consultation");
+  const memberId   = refs.members.get("sarah@demo.com") ?? null;
+  if (!customerId || !serviceId) {
+    fail("seedFollowUpScenario: missing refs");
+    return { appointments: { created: 0, skipped: 0 }, conversations: { created: 0, skipped: 0 }, messages: { created: 0, skipped: 0 } };
+  }
+
+  const apptStart   = daysAgo(11, 13);
+  const apptEnd     = minutesAfter(apptStart, 60);
+  const convStart   = daysAgo(9, 10);   // follow-up 2 days after appointment
+
+  const apptResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingAppt] = await sql`
+    SELECT id FROM "Appointment"
+    WHERE "tenantId" = ${tenantId} AND "customerId" = ${customerId} AND "startAt" = ${apptStart}
+    LIMIT 1
+  `;
+  let apptId: string;
+  if (existingAppt) {
+    apptId = existingAppt.id as string; apptResult.skipped++;
+  } else {
+    apptId = cuid();
+    await sql`
+      INSERT INTO "Appointment"
+        (id, "tenantId", "customerId", "serviceId", "teamMemberId",
+         "startAt", "endAt", status, "bookedVia", "confirmedAt", "createdAt")
+      VALUES
+        (${apptId}, ${tenantId}, ${customerId}, ${serviceId}, ${memberId},
+         ${apptStart}, ${apptEnd}, 'COMPLETED', 'AI', ${daysAgo(14, 10)}, ${daysAgo(14, 10)})
+    `;
+    apptResult.created++;
+  }
+
+  const convResult: SeedResult = { created: 0, skipped: 0 };
+  const [existingConv] = await sql`
+    SELECT id FROM "Conversation"
+    WHERE "tenantId" = ${tenantId} AND "externalId" = 'demo-conv-007' LIMIT 1
+  `;
+  let convId: string;
+  if (existingConv) {
+    convId = existingConv.id as string; convResult.skipped++;
+  } else {
+    convId = cuid();
+    await sql`
+      INSERT INTO "Conversation"
+        (id, "tenantId", "customerId", channel, "externalId", status,
+         "aiHandled", "createdAt", "updatedAt")
+      VALUES
+        (${convId}, ${tenantId}, ${customerId}, 'WHATSAPP', 'demo-conv-007', 'RESOLVED',
+         true, ${convStart}, ${minutesAfter(convStart, 15)})
+    `;
+    convResult.created++;
+  }
+
+  const messages: MessageInput[] = [
+    { role: "ASSISTANT", content: "Hi Nina! 👋 This is Demo Business. We just wanted to check in after your Premium Consultation on Monday. How did everything go?" },
+    { role: "USER",      content: "It was really great, thank you! Very helpful session" },
+    { role: "ASSISTANT", content: "Wonderful to hear! We're so glad it was useful. Is there anything else we can help you with, or any follow-up questions from the session?" },
+    { role: "USER",      content: "No, I think I have everything I need for now. I'll definitely be back" },
+    { role: "ASSISTANT", content: "That's great to hear, Nina! We look forward to seeing you again. Feel free to message us anytime 😊" },
+    { role: "USER",      content: "Will do. Thanks again!" },
+    { role: "ASSISTANT", content: "Take care! 👋" },
+  ];
+  const msgResult = await seedMessages(convId, messages, convStart);
+
+  ok(`Follow-up scenario (nina.kovacs@demo.com): done`);
+  return { appointments: apptResult, conversations: convResult, messages: msgResult };
+}
+
 // ─── Main (skeleton — scenarios added in later tasks) ────────────────────────
 
 async function main() {
@@ -436,6 +577,9 @@ async function main() {
   add(await seedBookingScenario(tenantId, refs, 2));
   add(await seedCancelledScenario(tenantId, refs));
   add(await seedRescheduleScenario(tenantId, refs));
+  add(await seedInfoScenario(tenantId, refs, 1));
+  add(await seedInfoScenario(tenantId, refs, 2));
+  add(await seedFollowUpScenario(tenantId, refs));
 
   const pad = (n: number) => String(n).padEnd(8);
   console.log("\n─── Demo Seed Summary ──────────────────────────────────────────────");
