@@ -59,11 +59,13 @@ export function InboxClient({
   const [takingOver, setTakingOver] = useState(false);
 
   // Sync props → state on server re-render (conversation switch)
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setMessages(initialMessages);
     setSelectedConversation(initialSelectedConversation);
     setDismissedDraftId(null);
   }, [selectedConversationId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── Realtime: new messages in selected conversation ──────────────────────────
   useEffect(() => {
