@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { CommandPaletteProvider } from "@/components/command-palette/command-palette-provider";
+import { CommandPalette } from "@/components/command-palette/command-palette";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -68,13 +70,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <>
+    <CommandPaletteProvider>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--accent)] focus:text-white focus:rounded-[6px] focus:text-sm focus:font-medium"
       >
         Skip to content
       </a>
+      <CommandPalette tenantId={tenant.id} tenantSlug={tenant.slug} />
       <div className="flex h-screen bg-[var(--bg)]">
         <Sidebar
           tenant={{
@@ -92,6 +95,6 @@ export default async function DashboardLayout({
           {children}
         </main>
       </div>
-    </>
+    </CommandPaletteProvider>
   );
 }
