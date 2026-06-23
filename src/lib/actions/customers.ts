@@ -132,8 +132,9 @@ export async function deleteCustomer(
     });
     revalidatePath(`/${slug}/customers`);
     return { success: true };
-  } catch (e) {
-    if (e instanceof AuthError) return { success: false, error: (e as AuthError).message };
+  } catch (e: unknown) {
+    if (e instanceof AuthError) return { success: false, error: e.message };
+    if (isPrismaUniqueError(e)) return { success: false, error: uniqueErrorMessage(e) };
     return { success: false, error: "Failed to delete customer" };
   }
 }
