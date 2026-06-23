@@ -37,6 +37,8 @@ This plan covers **dashboard code only** (Phases 4A, 4B-dashboard, 4E, 4F-partia
 - `src/lib/actions/integrations.ts` — server actions for MessagingIntegration CRUD
 - `src/app/(dashboard)/[tenant]/settings/integrations/page.tsx`
 - `src/components/settings/messaging-integration-form.tsx`
+- `src/app/api/public/availability/route.ts` — public slot availability (no auth, browser-safe)
+- `src/app/api/public/bookings/route.ts` — public booking submission (no auth, browser-safe)
 - `src/app/book/[tenant-slug]/page.tsx` — public booking page (Server Component)
 - `src/app/book/[tenant-slug]/booking-client.tsx` — multi-step form (Client Component)
 - `vitest.config.ts`
@@ -814,12 +816,8 @@ export async function POST(request: NextRequest) {
           data: { tenantId, phone: data.from, name: data.from },
           select: { id: true },
         });
-      } else {
-        await tx.customer.update({
-          where: { id: customer.id },
-          data: { updatedAt: new Date() },
-        });
       }
+      // Note: Customer has no updatedAt field — no update needed on repeat visits
 
       // 3. Find or create Conversation
       const convExternalId = `${data.instanceName}:${data.from}`;
@@ -1502,6 +1500,7 @@ import {
   NotificationType,
   Prisma,
 } from "@prisma/client";
+import { addHours } from "date-fns";
 import { addHours } from "date-fns";
 
 const Schema = z.object({
@@ -2478,7 +2477,331 @@ git commit -m "feat: add channel badge (WhatsApp/Web Chat) to Inbox conversation
 
 ---
 
-## Task 14: Public Booking Page
+## Task 14: Public API Routes (for Booking Page)
+
+The public booking page runs in the browser and cannot hold `N8N_API_KEY`. Instead of calling `/api/internal/*` directly, the browser calls `/api/public/*` routes that:
+- Look up tenant by `tenantSlug` (not raw `tenantId`)
+- Enforce the same business rules via direct Prisma calls
+- Require no authentication (rate-limited in Phase 4F)
+
+**Files:**
+- Create: `src/app/api/public/availability/route.ts`
+- Create: `src/app/api/public/bookings/route.ts`
+
+- [ ] **Step 1: Create public availability route**
+
+```typescript
+// src/app/api/public/availability/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { generateSlots } from "@/lib/internal-api/availability";
+import { AppointmentStatus } from "@prisma/client";
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  const tenantSlug = searchParams.get("tenantSlug");
+  const serviceId = searchParams.get("serviceId");
+  const dateStr = searchParams.get("date");
+
+  if (!tenantSlug || !serviceId || !dateStr) {
+    return NextResponse.json({ error: "tenantSlug, serviceId, and date are required" }, { status: 422 });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 422 });
+  }
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { slug: tenantSlug, deletedAt: null },
+    select: { id: true, timezone: true },
+  });
+  if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const service = await prisma.service.findFirst({
+    where: { id: serviceId, tenantId: tenant.id, deletedAt: null, isActive: true },
+    select: { duration: true, bufferTime: true },
+  });
+  if (!service) return NextResponse.json({ error: "Service not found" }, { status: 404 });
+
+  const dayOfWeek = new Date(
+    new Date(`${dateStr}T00:00:00Z`).toLocaleString("en-US", { timeZone: tenant.timezone })
+  ).getDay();
+
+  const teamMembers = await prisma.teamMember.findMany({
+    where: {
+      tenantId: tenant.id,
+      deletedAt: null,
+      isActive: true,
+      services: { some: { serviceId } },
+    },
+    select: { id: true, name: true },
+  });
+
+  const allSlots: Array<{ startAt: string; endAt: string; teamMemberId: string; teamMemberName: string }> = [];
+
+  for (const member of teamMembers) {
+    const workingHours = await prisma.workingHours.findFirst({
+      where: {
+        tenantId: tenant.id,
+        dayOfWeek,
+        isOpen: true,
+        OR: [{ teamMemberId: member.id }, { teamMemberId: null }],
+      },
+      orderBy: { teamMemberId: "desc" },
+      select: { startTime: true, endTime: true },
+    });
+
+    const busyPeriods = await prisma.busyPeriod.findMany({
+      where: {
+        tenantId: tenant.id,
+        teamMemberId: member.id,
+        startAt: { gte: new Date(`${dateStr}T00:00:00Z`) },
+        endAt: { lte: new Date(`${dateStr}T23:59:59Z`) },
+      },
+      select: { startAt: true, endAt: true },
+    });
+
+    const existingAppointments = await prisma.appointment.findMany({
+      where: {
+        tenantId: tenant.id,
+        teamMemberId: member.id,
+        deletedAt: null,
+        status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] },
+        startAt: { gte: new Date(`${dateStr}T00:00:00Z`) },
+        endAt: { lte: new Date(`${dateStr}T23:59:59Z`) },
+      },
+      select: { startAt: true, endAt: true },
+    });
+
+    const slots = generateSlots({
+      dateStr,
+      timezone: tenant.timezone,
+      workingHours,
+      durationMinutes: service.duration,
+      bufferMinutes: service.bufferTime,
+      busyPeriods,
+      existingAppointments,
+    });
+
+    for (const slot of slots) {
+      allSlots.push({
+        startAt: slot.startAt.toISOString(),
+        endAt: slot.endAt.toISOString(),
+        teamMemberId: member.id,
+        teamMemberName: member.name,
+      });
+    }
+  }
+
+  allSlots.sort((a, b) => a.startAt.localeCompare(b.startAt));
+  return NextResponse.json({ date: dateStr, slots: allSlots });
+}
+```
+
+- [ ] **Step 2: Create public bookings route**
+
+```typescript
+// src/app/api/public/bookings/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import {
+  AppointmentStatus,
+  AuditActorType,
+  BookingChannel,
+  NotificationChannel,
+  NotificationType,
+  Prisma,
+} from "@prisma/client";
+import { addHours } from "date-fns";
+
+const Schema = z.object({
+  tenantSlug: z.string().min(1),
+  serviceId: z.string().min(1),
+  teamMemberId: z.string().min(1),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  customerName: z.string().min(1),
+  customerEmail: z.string().email(),
+  customerPhone: z.string().nullable().optional(),
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    const parsed = Schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation error", details: parsed.error.flatten() },
+        { status: 422 }
+      );
+    }
+    const data = parsed.data;
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: data.tenantSlug, deletedAt: null },
+      select: { id: true, aiSettings: { select: { requireConfirm: true } } },
+    });
+    if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const startAt = new Date(data.startAt);
+    const endAt = new Date(data.endAt);
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // Find or create customer
+        let customer = await tx.customer.findFirst({
+          where: {
+            tenantId: tenant.id,
+            deletedAt: null,
+            OR: [
+              ...(data.customerEmail ? [{ email: data.customerEmail }] : []),
+              ...(data.customerPhone ? [{ phone: data.customerPhone }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+        if (!customer) {
+          customer = await tx.customer.create({
+            data: {
+              tenantId: tenant.id,
+              name: data.customerName,
+              email: data.customerEmail,
+              phone: data.customerPhone ?? null,
+            },
+            select: { id: true },
+          });
+        }
+
+        // Conflict check
+        const conflicts = await tx.appointment.findMany({
+          where: {
+            tenantId: tenant.id,
+            teamMemberId: data.teamMemberId,
+            deletedAt: null,
+            status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] },
+            startAt: { lt: endAt },
+            endAt: { gt: startAt },
+          },
+          select: { id: true },
+        });
+        if (conflicts.length > 0) {
+          return { conflict: true };
+        }
+
+        const requireConfirm = tenant.aiSettings?.requireConfirm ?? false;
+        const status = requireConfirm ? AppointmentStatus.PENDING : AppointmentStatus.CONFIRMED;
+
+        const appointment = await tx.appointment.create({
+          data: {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            serviceId: data.serviceId,
+            teamMemberId: data.teamMemberId,
+            startAt,
+            endAt,
+            status,
+            bookedVia: BookingChannel.SELF_SERVICE,
+            ...(status === AppointmentStatus.CONFIRMED ? { confirmedAt: new Date() } : {}),
+          },
+          select: { id: true, status: true },
+        });
+
+        await tx.notificationJob.createMany({
+          data: [
+            { type: NotificationType.APPOINTMENT_CONFIRMATION, scheduledFor: new Date() },
+            { type: NotificationType.APPOINTMENT_REMINDER_24H, scheduledFor: addHours(startAt, -24) },
+            { type: NotificationType.APPOINTMENT_REMINDER_1H, scheduledFor: addHours(startAt, -1) },
+            { type: NotificationType.STAFF_NEW_BOOKING, scheduledFor: new Date() },
+          ].map((n) => ({
+            tenantId: tenant.id,
+            type: n.type,
+            channel: NotificationChannel.EMAIL,
+            recipient: data.customerEmail,
+            payload: {
+              appointmentId: appointment.id,
+              customerId: customer.id,
+              serviceId: data.serviceId,
+              teamMemberId: data.teamMemberId,
+              customerName: data.customerName,
+              startAt: startAt.toISOString(),
+              endAt: endAt.toISOString(),
+            },
+            scheduledFor: n.scheduledFor,
+          })),
+          skipDuplicates: true,
+        });
+
+        await tx.analyticsEvent.create({
+          data: {
+            tenantId: tenant.id,
+            event: "appointment.booked",
+            properties: { channel: "SELF_SERVICE", serviceId: data.serviceId },
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId: tenant.id,
+            actorType: AuditActorType.SYSTEM,
+            action: "appointment.created",
+            resource: "Appointment",
+            resourceId: appointment.id,
+            changes: { status, bookedVia: "SELF_SERVICE" },
+          },
+        });
+
+        return { conflict: false, appointmentId: appointment.id, status: appointment.status };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+
+    if (result.conflict) {
+      return NextResponse.json(
+        { error: "This slot is no longer available", code: "SLOT_UNAVAILABLE" },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ appointmentId: result.appointmentId, status: result.status });
+  } catch (e) {
+    console.error("[public/bookings]", e);
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  }
+}
+```
+
+- [ ] **Step 3: Ensure `/api/public/` is excluded from proxy auth check**
+
+In `src/proxy.ts`, `PUBLIC_ROUTES` already includes `/api/internal/` and `/api/webhooks/`. Add `/api/public/`:
+
+```typescript
+const PUBLIC_ROUTES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/api/internal/",
+  "/api/webhooks/",
+  "/api/public/",   // ← add this
+];
+```
+
+- [ ] **Step 4: TypeScript check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/app/api/public/ src/proxy.ts
+git commit -m "feat: add /api/public/availability and /api/public/bookings for unauthenticated booking page"
+```
+
+---
+
+## Task 15: Public Booking Page
 
 **Files:**
 - Create: `src/app/book/[tenant-slug]/page.tsx`
@@ -2541,7 +2864,7 @@ export default async function PublicBookingPage({ params }: Props) {
           <h1 className="text-2xl font-semibold text-[var(--text-primary)]">{tenant.name}</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Book your appointment online</p>
         </div>
-        <BookingClient tenantId={tenant.id} tenantSlug={tenant.slug} timezone={tenant.timezone} services={services} />
+        <BookingClient tenantSlug={tenant.slug} timezone={tenant.timezone} services={services} />
       </div>
     </div>
   );
@@ -2574,8 +2897,7 @@ interface Slot {
 }
 
 interface Props {
-  tenantId: string;
-  tenantSlug: string;
+  tenantSlug: string; // used in /api/public/* calls — browser never sees tenantId
   timezone: string;
   services: Service[];
 }
@@ -2596,7 +2918,7 @@ interface DetailsFormValues {
   phone: string;
 }
 
-export function BookingClient({ tenantId, tenantSlug, timezone, services }: Props) {
+export function BookingClient({ tenantSlug, timezone, services }: Props) {
   const [step, setStep] = useState<Step>("service");
   const [booking, setBooking] = useState<BookingState>({
     service: null,
@@ -2617,13 +2939,8 @@ export function BookingClient({ tenantId, tenantSlug, timezone, services }: Prop
     setSlots([]);
     try {
       const res = await fetch(
-        `/api/internal/tenants/${tenantId}/availability?serviceId=${serviceId}&date=${date}`,
-        {
-          headers: { authorization: "" }, // public booking page uses no auth — see note below
-        }
+        `/api/public/availability?tenantSlug=${tenantSlug}&serviceId=${serviceId}&date=${date}`
       );
-      // NOTE: The availability endpoint requires N8N_API_KEY. The public booking page
-      // must call a dedicated public endpoint instead. See TODO below.
       if (!res.ok) throw new Error("Failed to fetch availability");
       const data = await res.json();
       setSlots(data.slots);
@@ -2639,45 +2956,31 @@ export function BookingClient({ tenantId, tenantSlug, timezone, services }: Prop
     setSubmitting(true);
     setError(null);
     try {
-      // Find or create customer
-      const customerRes = await fetch("/api/internal/customers/find-or-create", {
+      const res = await fetch("/api/public/bookings", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: "" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          tenantId,
-          phone: values.phone || null,
-          email: values.email,
-          name: values.name,
-        }),
-      });
-      if (!customerRes.ok) throw new Error("Failed to create customer");
-      const { customerId } = await customerRes.json();
-
-      // Create appointment
-      const apptRes = await fetch("/api/internal/appointments", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "" },
-        body: JSON.stringify({
-          tenantId,
-          customerId,
+          tenantSlug,
           serviceId: booking.service.id,
           teamMemberId: booking.slot.teamMemberId,
           startAt: booking.slot.startAt,
           endAt: booking.slot.endAt,
-          bookedVia: "SELF_SERVICE",
+          customerName: values.name,
+          customerEmail: values.email,
+          customerPhone: values.phone || null,
         }),
       });
 
-      if (apptRes.status === 409) {
+      if (res.status === 409) {
         setError("This slot was just taken. Please choose another time.");
         setStep("slot");
         fetchSlots(booking.service.id, booking.date);
         return;
       }
-      if (!apptRes.ok) throw new Error("Failed to create appointment");
+      if (!res.ok) throw new Error("Failed to create booking");
 
-      const apptData = await apptRes.json();
-      setBooking((b) => ({ ...b, customerId, appointmentId: apptData.appointmentId }));
+      const data = await res.json();
+      setBooking((b) => ({ ...b, appointmentId: data.appointmentId }));
       setStep("confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
