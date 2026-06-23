@@ -6,6 +6,7 @@ import { requireTenantAccess, AuthError } from "@/lib/server-auth";
 import { requirePermission } from "@/lib/permissions";
 import { z } from "zod";
 import { encrypt } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -30,12 +31,21 @@ export async function updateProfile(
   const { tenantId, name, timezone } = parsed.data;
 
   try {
-    const { role } = await requireTenantAccess(tenantId);
+    const { role, userId } = await requireTenantAccess(tenantId);
     requirePermission(role, "profile.edit");
 
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { name, timezone },
+    });
+
+    await logAudit({
+      tenantId,
+      actorId: userId,
+      action: "profile.updated",
+      resource: "Tenant",
+      resourceId: tenantId,
+      changes: { name, timezone },
     });
 
     const tenant = await prisma.tenant.findUnique({
@@ -134,7 +144,7 @@ export async function createTeamMember(
   const { tenantId, name, email, role } = parsed.data;
 
   try {
-    const { role: memberRole } = await requireTenantAccess(tenantId);
+    const { role: memberRole, userId } = await requireTenantAccess(tenantId);
     requirePermission(memberRole, "team.manage");
 
     const existing = await prisma.teamMember.findFirst({
@@ -152,6 +162,15 @@ export async function createTeamMember(
         role: role || null,
         inviteToken: crypto.randomUUID(),
       },
+    });
+
+    await logAudit({
+      tenantId,
+      actorId: userId,
+      action: "team_member.created",
+      resource: "TeamMember",
+      resourceId: "new",
+      changes: { name, email },
     });
 
     const tenant = await prisma.tenant.findUnique({
@@ -172,7 +191,7 @@ export async function deactivateTeamMember(
   teamMemberId: string,
   tenantSlug: string
 ): Promise<void> {
-  const { role } = await requireTenantAccess(tenantId);
+  const { role, userId } = await requireTenantAccess(tenantId);
   requirePermission(role, "team.manage");
 
   const existing = await prisma.teamMember.findFirst({
@@ -185,6 +204,15 @@ export async function deactivateTeamMember(
     where: { id: teamMemberId },
     data: { isActive: false },
   });
+
+  await logAudit({
+    tenantId,
+    actorId: userId,
+    action: "team_member.deactivated",
+    resource: "TeamMember",
+    resourceId: teamMemberId,
+  });
+
   revalidatePath(`/${tenantSlug}/settings/team`);
 }
 
@@ -231,13 +259,22 @@ export async function updateAISettings(
   }
 
   try {
-    const { role } = await requireTenantAccess(tenantId);
+    const { role, userId } = await requireTenantAccess(tenantId);
     requirePermission(role, "ai_settings.manage");
 
     await prisma.aISettings.upsert({
       where: { tenantId },
       update: data,
       create: { tenantId, ...data },
+    });
+
+    await logAudit({
+      tenantId,
+      actorId: userId,
+      action: "ai_settings.updated",
+      resource: "AISettings",
+      resourceId: tenantId,
+      changes: { provider: data.provider, model: data.model },
     });
 
     const tenant = await prisma.tenant.findUnique({

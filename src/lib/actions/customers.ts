@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireTenantAccess, AuthError } from "@/lib/server-auth";
 import { requirePermission } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
 
 export type ActionResult = { success: boolean; error?: string };
 
@@ -117,7 +118,7 @@ export async function deleteCustomer(
   id: string
 ): Promise<ActionResult> {
   try {
-    const { role } = await requireTenantAccess(tenantId);
+    const { role, userId } = await requireTenantAccess(tenantId);
     requirePermission(role, "customers.edit");
 
     const existing = await prisma.customer.findFirst({
@@ -130,6 +131,15 @@ export async function deleteCustomer(
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    await logAudit({
+      tenantId,
+      actorId: userId,
+      action: "customer.deleted",
+      resource: "Customer",
+      resourceId: id,
+    });
+
     revalidatePath(`/${slug}/customers`);
     return { success: true };
   } catch (e: unknown) {

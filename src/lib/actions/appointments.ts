@@ -5,6 +5,7 @@ import { AppointmentStatus, BookingChannel } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireTenantAccess, AuthError } from "@/lib/server-auth";
 import { requirePermission } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
 import { getAppointmentDetail } from "@/lib/appointments-queries";
 import type { AppointmentDetail } from "@/lib/appointments-queries";
 
@@ -124,7 +125,7 @@ export async function updateAppointmentStatus(
   status: AppointmentStatus
 ): Promise<ActionResult> {
   try {
-    const { role } = await requireTenantAccess(tenantId);
+    const { role, userId } = await requireTenantAccess(tenantId);
     requirePermission(role, "appointments.manage_all");
 
     const existing = await prisma.appointment.findFirst({
@@ -141,6 +142,16 @@ export async function updateAppointmentStatus(
         ...(status === AppointmentStatus.CANCELLED ? { cancelledAt: new Date() } : {}),
       },
     });
+
+    if (status === AppointmentStatus.CANCELLED) {
+      await logAudit({
+        tenantId,
+        actorId: userId,
+        action: "appointment.cancelled",
+        resource: "Appointment",
+        resourceId: appointmentId,
+      });
+    }
 
     revalidatePath(`/${tenantSlug}/appointments`);
     return { success: true };
