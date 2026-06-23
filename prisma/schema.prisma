@@ -103,6 +103,10 @@ enum AuditActorType {
   AI
 }
 
+enum MessagingProvider {
+  EVOLUTION_API
+}
+
 // ─── Identity & Tenancy ───────────────────────────────────────────────────────
 
 model User {
@@ -144,8 +148,9 @@ model Tenant {
   notificationJobs     NotificationJob[]
   auditLogs            AuditLog[]
   featureOverrides     EntitlementOverride[]
-  calendarIntegrations CalendarIntegration[]
-  attachments          Attachment[]
+  calendarIntegrations  CalendarIntegration[]
+  messagingIntegrations MessagingIntegration[]
+  attachments           Attachment[]
 }
 
 model TenantMember {
@@ -265,12 +270,13 @@ model Customer {
 // ─── AI Chat Inbox ────────────────────────────────────────────────────────────
 
 model Conversation {
-  id               String              @id @default(cuid())
-  tenantId         String
-  customerId       String?
-  channel          ConversationChannel
-  externalId       String?
-  status           ConversationStatus  @default(OPEN)
+  id                     String              @id @default(cuid())
+  tenantId               String
+  customerId             String?
+  channel                ConversationChannel
+  externalId             String?
+  messagingIntegrationId String?
+  status                 ConversationStatus  @default(OPEN)
   assignedToId     String?
   aiHandled        Boolean             @default(true)
   summary          String?
@@ -281,13 +287,14 @@ model Conversation {
   updatedAt        DateTime            @updatedAt
   deletedAt        DateTime?
 
-  tenant       Tenant             @relation(fields: [tenantId], references: [id])
-  customer     Customer?          @relation(fields: [customerId], references: [id])
-  assignedTo   TeamMember?        @relation(fields: [assignedToId], references: [id])
-  messages     Message[]
-  appointments Appointment[]
-  notes        ConversationNote[]
-  attachments  Attachment[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  customer             Customer?             @relation(fields: [customerId], references: [id])
+  assignedTo           TeamMember?           @relation(fields: [assignedToId], references: [id])
+  messagingIntegration MessagingIntegration? @relation(fields: [messagingIntegrationId], references: [id])
+  messages             Message[]
+  appointments         Appointment[]
+  notes                ConversationNote[]
+  attachments          Attachment[]
 }
 
 model Message {
@@ -296,6 +303,7 @@ model Message {
   role           MessageRole
   content        String
   isDraft        Boolean     @default(false)
+  externalId     String?     @unique
   tokensUsed     Int?
   provider       String?
   model          String?
@@ -445,6 +453,31 @@ model CalendarIntegration {
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id])
   teamMember TeamMember? @relation(fields: [teamMemberId], references: [id])
+}
+
+// ─── Messaging Integration ────────────────────────────────────────────────────
+
+model MessagingIntegration {
+  id              String            @id @default(cuid())
+  tenantId        String
+  provider        MessagingProvider
+  instanceName    String
+  displayName     String?
+  phoneNumber     String?
+  apiEndpoint     String?
+  apiKey          String
+  webhookSecret   String?
+  isActive        Boolean           @default(true)
+  lastConnectedAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+
+  @@unique([provider, instanceName])
+  @@index([tenantId, isActive])
 }
 
 // ─── Feature Flags & Entitlements ─────────────────────────────────────────────

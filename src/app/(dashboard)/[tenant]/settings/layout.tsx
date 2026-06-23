@@ -13,6 +13,7 @@ const NAV = [
   { label: "Working Hours", segment: "working-hours" },
   { label: "Team Members", segment: "team" },
   { label: "AI Settings", segment: "ai" },
+  { label: "Integrations", segment: "integrations" },
 ] as const;
 
 export default async function SettingsLayout({ children, params }: Props) {

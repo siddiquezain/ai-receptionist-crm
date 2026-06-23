@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createClient } from "@/lib/supabase/client";
 
 interface UserMenuProps {
   name: string | null;
@@ -35,8 +34,7 @@ export function UserMenu({ name, email }: UserMenuProps) {
   async function handleSignOut() {
     setLoading(true);
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      await fetch("/api/auth/logout", { method: "POST" });
       router.push("/login");
     } finally {
       setLoading(false);

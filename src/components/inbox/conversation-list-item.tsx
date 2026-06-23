@@ -9,10 +9,6 @@ const STATUS_DOT: Record<ConversationStatus, string> = {
   ARCHIVED:  "var(--text-muted)",
 };
 
-const CHANNEL_LABEL = {
-  WEB_CHAT: "Web",
-  WHATSAPP: "WhatsApp",
-} as const;
 
 interface ConversationListItemProps {
   conversation: ConversationListItem;
@@ -61,16 +57,16 @@ export function ConversationListItemRow({ conversation, isSelected, onClick }: C
 
           {/* Channel badge + message preview */}
           <div className="mt-0.5 flex items-center gap-1.5">
-            <span
-              className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-px text-[10px] font-medium"
-              style={{
-                background: "var(--accent-subtle)",
-                color: "var(--accent)",
-                border: "1px solid var(--accent-subtle-border)",
-              }}
-            >
-              {CHANNEL_LABEL[conversation.channel]}
-            </span>
+            {conversation.channel === "WHATSAPP" && (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                WhatsApp
+              </span>
+            )}
+            {conversation.channel === "WEB_CHAT" && (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                Web Chat
+              </span>
+            )}
             <p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
               {conversation.lastMessage?.content ?? "No messages yet"}
             </p>
