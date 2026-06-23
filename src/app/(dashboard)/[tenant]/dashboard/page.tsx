@@ -1,16 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import {
-  getStatCards,
-  getTrendData,
-  getUpcomingAppointments,
-  getInboxSnapshot,
-} from "@/lib/dashboard-queries";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { TrendChart } from "@/components/dashboard/trend-chart";
-import { UpcomingAppointments } from "@/components/dashboard/upcoming-appointments";
-import { InboxSnapshot } from "@/components/dashboard/inbox-snapshot";
+import { DashboardStatCards } from "@/components/dashboard/dashboard-stat-cards";
+import { DashboardTrendSection } from "@/components/dashboard/dashboard-trend-section";
+import { DashboardActivity } from "@/components/dashboard/dashboard-activity";
+import { StatCardSkeleton, ChartSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -30,40 +25,36 @@ export default async function DashboardPage({ params }: Props) {
 
   if (!tenant) redirect("/login");
 
-  const [stats, trendData, upcomingAppointments, inboxConversations] =
-    await Promise.all([
-      getStatCards(tenant.id),
-      getTrendData(tenant.id),
-      getUpcomingAppointments(tenant.id),
-      getInboxSnapshot(tenant.id),
-    ]);
-
   return (
-    <div className="space-y-5 p-6">
-      {/* KPI strip */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard {...stats.appointmentsToday} />
-        <StatCard {...stats.pendingConfirmations} />
-        <StatCard {...stats.openConversations} />
-        <StatCard {...stats.conversionRate} />
-      </div>
+    <div className="space-y-5 p-6" id="main-content">
+      <Suspense
+        fallback={
+          <div className="grid grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))}
+          </div>
+        }
+      >
+        <DashboardStatCards tenantId={tenant.id} />
+      </Suspense>
 
-      {/* Trend chart (2/3) + Inbox snapshot (1/3) */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <TrendChart data={trendData} />
-        </div>
-        <InboxSnapshot
-          conversations={inboxConversations}
-          tenantSlug={tenant.slug}
-        />
-      </div>
+      <Suspense
+        fallback={
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <ChartSkeleton height={200} />
+            </div>
+            <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)] h-[232px]" />
+          </div>
+        }
+      >
+        <DashboardTrendSection tenantId={tenant.id} tenantSlug={tenant.slug} />
+      </Suspense>
 
-      {/* Upcoming appointments — full width */}
-      <UpcomingAppointments
-        appointments={upcomingAppointments}
-        timezone={tenant.timezone}
-      />
+      <Suspense fallback={<TableSkeleton rows={5} cols={5} />}>
+        <DashboardActivity tenantId={tenant.id} timezone={tenant.timezone} />
+      </Suspense>
     </div>
   );
 }
