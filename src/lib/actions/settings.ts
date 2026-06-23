@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireTenantAccess, AuthError } from "@/lib/server-auth";
+import { requirePermission } from "@/lib/permissions";
 import { z } from "zod";
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -27,6 +29,9 @@ export async function updateProfile(
   const { tenantId, name, timezone } = parsed.data;
 
   try {
+    const { role } = await requireTenantAccess(tenantId);
+    requirePermission(role, "profile.edit");
+
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { name, timezone },
@@ -39,7 +44,8 @@ export async function updateProfile(
 
     revalidatePath(`/${tenant?.slug}/settings/profile`);
     return { success: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof AuthError) return { error: e.message };
     return { error: "Failed to update profile" };
   }
 }
@@ -74,6 +80,9 @@ export async function upsertWorkingHours(
   const { tenantId, dayOfWeek, isOpen, startTime, endTime } = parsed.data;
 
   try {
+    const { role } = await requireTenantAccess(tenantId);
+    requirePermission(role, "working_hours.manage_all");
+
     const existing = await prisma.workingHours.findFirst({
       where: { tenantId, dayOfWeek, teamMemberId: null },
     });
@@ -96,7 +105,8 @@ export async function upsertWorkingHours(
 
     revalidatePath(`/${tenant?.slug}/settings/working-hours`);
     return { success: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof AuthError) return { error: e.message };
     return { error: "Failed to save working hours" };
   }
 }
@@ -123,6 +133,9 @@ export async function createTeamMember(
   const { tenantId, name, email, role } = parsed.data;
 
   try {
+    const { role: memberRole } = await requireTenantAccess(tenantId);
+    requirePermission(memberRole, "team.manage");
+
     const existing = await prisma.teamMember.findFirst({
       where: { tenantId, email, deletedAt: null },
     });
@@ -147,12 +160,26 @@ export async function createTeamMember(
 
     revalidatePath(`/${tenant?.slug}/settings/team`);
     return { success: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof AuthError) return { error: e.message };
     return { error: "Failed to create team member" };
   }
 }
 
-export async function deactivateTeamMember(teamMemberId: string, tenantSlug: string) {
+export async function deactivateTeamMember(
+  tenantId: string,
+  teamMemberId: string,
+  tenantSlug: string
+): Promise<void> {
+  const { role } = await requireTenantAccess(tenantId);
+  requirePermission(role, "team.manage");
+
+  const existing = await prisma.teamMember.findFirst({
+    where: { id: teamMemberId, tenantId },
+    select: { id: true },
+  });
+  if (!existing) throw new Error("Team member not found");
+
   await prisma.teamMember.update({
     where: { id: teamMemberId },
     data: { isActive: false },
@@ -196,6 +223,9 @@ export async function updateAISettings(
   const { tenantId, ...data } = parsed.data;
 
   try {
+    const { role } = await requireTenantAccess(tenantId);
+    requirePermission(role, "ai_settings.manage");
+
     await prisma.aISettings.upsert({
       where: { tenantId },
       update: data,
@@ -209,7 +239,8 @@ export async function updateAISettings(
 
     revalidatePath(`/${tenant?.slug}/settings/ai`);
     return { success: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof AuthError) return { error: e.message };
     return { error: "Failed to update AI settings" };
   }
 }

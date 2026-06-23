@@ -30,7 +30,7 @@ export function TeamMembersPanel({ tenantId, tenantSlug, members }: Props) {
   const handleDeactivate = (memberId: string) => {
     setDeactivating(memberId);
     startTransition(async () => {
-      await deactivateTeamMember(memberId, tenantSlug);
+      await deactivateTeamMember(tenantId, memberId, tenantSlug);
       setDeactivating(null);
     });
   };
