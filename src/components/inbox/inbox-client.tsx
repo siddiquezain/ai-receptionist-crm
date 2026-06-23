@@ -5,6 +5,12 @@ import { useRouter, usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ConversationList } from "./conversation-list";
+import {
+  ConversationFilters,
+  ConversationFilterState,
+  DEFAULT_FILTER_STATE,
+  applyConversationFilter,
+} from "./conversation-filters";
 import { MessageThread } from "./message-thread";
 import { EscalationBanner } from "./escalation-banner";
 import { ThreadHeader } from "./thread-header";
@@ -57,6 +63,7 @@ export function InboxClient({
     useState<ConversationDetail | null>(initialSelectedConversation);
   const [dismissedDraftId, setDismissedDraftId] = useState<string | null>(null);
   const [takingOver, setTakingOver] = useState(false);
+  const [filter, setFilter] = useState<ConversationFilterState>(DEFAULT_FILTER_STATE);
 
   // Sync props → state on server re-render (conversation switch)
   useEffect(() => {
@@ -180,6 +187,8 @@ export function InboxClient({
   }
 
   // ── Derived state ────────────────────────────────────────────────────────────
+  const filteredConversations = applyConversationFilter(conversations, filter);
+
   const isStaffMode =
     selectedConversation !== null && selectedConversation.assignedToId !== null;
 
@@ -221,9 +230,14 @@ export function InboxClient({
             Inbox
           </p>
         </div>
+        <ConversationFilters
+          conversations={conversations}
+          value={filter}
+          onChange={setFilter}
+        />
         <div className="flex-1 overflow-y-auto">
           <ConversationList
-            conversations={conversations}
+            conversations={filteredConversations}
             selectedId={selectedConversationId}
             onSelect={selectConversation}
           />

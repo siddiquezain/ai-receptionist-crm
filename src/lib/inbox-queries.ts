@@ -12,6 +12,7 @@ export type ConversationListItem = {
   channel: ConversationChannel;
   status: ConversationStatus;
   assignedToId: string | null;
+  aiHandled: boolean;
   updatedAt: Date;
   customer: { name: string } | null;
   lastMessage: { content: string; role: MessageRole } | null;
@@ -71,6 +72,7 @@ export async function getConversations(
       channel: true,
       status: true,
       assignedToId: true,
+      aiHandled: true,
       updatedAt: true,
       customer: { select: { name: true } },
       messages: {
@@ -88,6 +90,7 @@ export async function getConversations(
       channel: c.channel,
       status: c.status,
       assignedToId: c.assignedToId,
+      aiHandled: c.aiHandled,
       updatedAt: c.updatedAt,
       customer: c.customer,
       lastMessage: c.messages[0] ?? null,
