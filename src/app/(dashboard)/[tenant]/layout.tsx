@@ -67,31 +67,31 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // All workspaces this user can switch to
-  const workspaces = dbUser.memberships.map((m) => ({
-    name: m.tenant.name,
-    slug: m.tenant.slug,
-    logo: m.tenant.logo,
-  }));
-
   return (
-    <div className="flex h-screen bg-[var(--bg)]">
-      <Sidebar
-        tenant={{
-          name: tenant.name,
-          slug: tenant.slug,
-          logo: tenant.logo,
-          plan: tenant.plan,
-        }}
-        user={{
-          name: dbUser.name,
-          email: dbUser.email,
-        }}
-        workspaces={workspaces}
-      />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+    <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--accent)] focus:text-white focus:rounded-[6px] focus:text-sm focus:font-medium"
+      >
+        Skip to content
+      </a>
+      <div className="flex h-screen bg-[var(--bg)]">
+        <Sidebar
+          tenant={{
+            name: tenant.name,
+            slug: tenant.slug,
+            logo: tenant.logo,
+            plan: tenant.plan,
+          }}
+          user={{
+            name: dbUser.name,
+            email: dbUser.email,
+          }}
+        />
+        <main id="main-content" className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </>
   );
 }

@@ -11,12 +11,6 @@ import {
 import { NavItem } from "./nav-item";
 import { UserMenu } from "./user-menu";
 
-interface Workspace {
-  name: string;
-  slug: string;
-  logo: string | null;
-}
-
 interface SidebarProps {
   tenant: {
     name: string;
@@ -28,7 +22,6 @@ interface SidebarProps {
     name: string | null;
     email: string;
   };
-  workspaces: Workspace[];
 }
 
 const NAV_ITEMS = [
@@ -40,7 +33,7 @@ const NAV_ITEMS = [
   { label: "Settings", icon: Settings, segment: "settings" },
 ] as const;
 
-export function Sidebar({ tenant, user, workspaces: _workspaces }: SidebarProps) {
+export function Sidebar({ tenant, user }: SidebarProps) {
   return (
     <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
       {/* Workspace header */}

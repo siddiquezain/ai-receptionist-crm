@@ -74,7 +74,7 @@ export default async function InboxPage({ params, searchParams }: Props) {
   ]);
 
   return (
-    <div className="h-[calc(100vh-var(--navbar-height,56px))] overflow-hidden">
+    <div className="h-dvh overflow-hidden">
       <InboxClient
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
