@@ -109,6 +109,7 @@ export function MessageInput({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+          aria-label="Type a message"
           rows={2}
           disabled={sending}
           className="flex-1 resize-none rounded-[6px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] disabled:opacity-50"
@@ -117,6 +118,7 @@ export function MessageInput({
           onClick={() => send(text)}
           disabled={sending || !text.trim()}
           size="icon"
+          aria-label="Send message"
           className="shrink-0"
         >
           {sending ? (
