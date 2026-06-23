@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireTenantAccess, AuthError } from "@/lib/server-auth";
+import { requirePermission } from "@/lib/permissions";
 
 export type ActionResult = { success: boolean; error?: string };
 
@@ -43,6 +45,9 @@ export async function createCustomer(
   }
 ): Promise<ActionResult> {
   try {
+    const { role } = await requireTenantAccess(tenantId);
+    requirePermission(role, "customers.edit");
+
     await prisma.customer.create({
       data: {
         tenantId,
@@ -56,6 +61,7 @@ export async function createCustomer(
     revalidatePath(`/${slug}/customers`);
     return { success: true };
   } catch (e: unknown) {
+    if (e instanceof AuthError) return { success: false, error: e.message };
     if (isPrismaUniqueError(e)) return { success: false, error: uniqueErrorMessage(e) };
     return { success: false, error: "Failed to create customer" };
   }
@@ -74,13 +80,16 @@ export async function updateCustomer(
     source?: string | null;
   }
 ): Promise<ActionResult> {
-  const existing = await prisma.customer.findFirst({
-    where: { id, tenantId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!existing) return { success: false, error: "Customer not found" };
-
   try {
+    const { role } = await requireTenantAccess(tenantId);
+    requirePermission(role, "customers.edit");
+
+    const existing = await prisma.customer.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) return { success: false, error: "Customer not found" };
+
     await prisma.customer.update({
       where: { id },
       data: {
@@ -96,6 +105,7 @@ export async function updateCustomer(
     revalidatePath(`/${slug}/customers/${id}`);
     return { success: true };
   } catch (e: unknown) {
+    if (e instanceof AuthError) return { success: false, error: e.message };
     if (isPrismaUniqueError(e)) return { success: false, error: uniqueErrorMessage(e) };
     return { success: false, error: "Failed to update customer" };
   }
@@ -107,6 +117,9 @@ export async function deleteCustomer(
   id: string
 ): Promise<ActionResult> {
   try {
+    const { role } = await requireTenantAccess(tenantId);
+    requirePermission(role, "customers.edit");
+
     const existing = await prisma.customer.findFirst({
       where: { id, tenantId, deletedAt: null },
       select: { id: true },
@@ -119,7 +132,8 @@ export async function deleteCustomer(
     });
     revalidatePath(`/${slug}/customers`);
     return { success: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof AuthError) return { success: false, error: (e as AuthError).message };
     return { success: false, error: "Failed to delete customer" };
   }
 }
