@@ -1,0 +1,299 @@
+{
+  "name": "Staff Reply — WhatsApp Delivery",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "staff-reply",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "id": "b1c2d3e4-0001-0000-0000-000000000001",
+      "name": "Receive Staff Reply",
+      "webhookId": "staff-reply"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "is-whatsapp",
+              "leftValue": "={{ $json.channel }}",
+              "rightValue": "WHATSAPP",
+              "operator": { "type": "string", "operation": "equals" }
+            },
+            {
+              "id": "has-to",
+              "leftValue": "={{ $json.to }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "id": "b1c2d3e4-0002-0000-0000-000000000001",
+      "name": "Is WhatsApp?"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/Tenant",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "=eq.{{ $('Receive Staff Reply').item.json.tenantId }}" },
+            { "name": "select", "value": "evolutionInstanceName,evolutionApiKey,evolutionApiUrl" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "id": "b1c2d3e4-0003-0000-0000-000000000001",
+      "name": "Get Tenant Credentials"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "has-creds",
+              "leftValue": "={{ $json[0]?.evolutionApiKey }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 200],
+      "id": "b1c2d3e4-0004-0000-0000-000000000001",
+      "name": "Has Credentials?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json[0].evolutionApiUrl || $env.EVOLUTION_API_URL).replace(/\\/$/, '') + '/message/sendText/' + $json[0].evolutionInstanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $json[0].evolutionApiKey }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Receive Staff Reply').item.json.to }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Receive Staff Reply').item.json.content }}"
+            }
+          ]
+        },
+        "options": { "continueOnFail": true }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 200],
+      "id": "b1c2d3e4-0005-0000-0000-000000000001",
+      "name": "Send via Evolution API"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/Message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversationId",
+              "value": "={{ $('Receive Staff Reply').item.json.conversationId }}"
+            },
+            { "name": "role", "value": "STAFF" },
+            {
+              "name": "content",
+              "value": "={{ $('Receive Staff Reply').item.json.content }}"
+            },
+            { "name": "isDraft", "value": false }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 200],
+      "id": "b1c2d3e4-0006-0000-0000-000000000001",
+      "name": "Save STAFF Message"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/Conversation",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $('Receive Staff Reply').item.json.conversationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "updatedAt", "value": "={{ new Date().toISOString() }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 200],
+      "id": "b1c2d3e4-0007-0000-0000-000000000001",
+      "name": "Update Conversation"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/Message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversationId",
+              "value": "={{ $('Receive Staff Reply').item.json.conversationId }}"
+            },
+            { "name": "role", "value": "STAFF" },
+            {
+              "name": "content",
+              "value": "={{ $('Receive Staff Reply').item.json.content }}"
+            },
+            { "name": "isDraft", "value": false }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 450],
+      "id": "b1c2d3e4-0008-0000-0000-000000000001",
+      "name": "Save Message (non-WA)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge both paths and respond\nreturn [{ json: { ok: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 300],
+      "id": "b1c2d3e4-0009-0000-0000-000000000001",
+      "name": "Done"
+    }
+  ],
+  "connections": {
+    "Receive Staff Reply": {
+      "main": [
+        [{ "node": "Is WhatsApp?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is WhatsApp?": {
+      "main": [
+        [{ "node": "Get Tenant Credentials", "type": "main", "index": 0 }],
+        [{ "node": "Save Message (non-WA)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Tenant Credentials": {
+      "main": [
+        [{ "node": "Has Credentials?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Credentials?": {
+      "main": [
+        [{ "node": "Send via Evolution API", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Send via Evolution API": {
+      "main": [
+        [{ "node": "Save STAFF Message", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save STAFF Message": {
+      "main": [
+        [{ "node": "Update Conversation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Conversation": {
+      "main": [
+        [{ "node": "Done", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Message (non-WA)": {
+      "main": [
+        [{ "node": "Done", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

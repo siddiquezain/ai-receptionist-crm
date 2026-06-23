@@ -1,0 +1,328 @@
+{
+  "name": "Web Chat AI Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "web-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "id": "c1d2e3f4-0001-0000-0000-000000000001",
+      "name": "Receive Web Chat",
+      "webhookId": "web-chat"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/n8n/context",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $env.N8N_INTERNAL_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "channel", "value": "WEB_CHAT" },
+            { "name": "tenantId", "value": "={{ $json.tenantId }}" },
+            {
+              "name": "conversationId",
+              "value": "={{ $json.conversationId || '' }}"
+            },
+            { "name": "text", "value": "={{ $json.message }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 300],
+      "id": "c1d2e3f4-0002-0000-0000-000000000001",
+      "name": "Get Chat Context"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "tenant-valid",
+              "leftValue": "={{ $json.tenantId }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "id": "c1d2e3f4-0003-0000-0000-000000000001",
+      "name": "Context Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"error\": \"Tenant not found\" }",
+        "options": { "responseCode": 404 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 150],
+      "id": "c1d2e3f4-0004-0000-0000-000000000001",
+      "name": "Respond Not Found"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $input.first().json;\nconst history = ctx.history || [];\nconst prior = history.slice(0, -1);\n\nlet fullSystemPrompt = ctx.systemPrompt;\nif (prior.length > 0) {\n  const transcript = prior\n    .map((m) => `${m.role === 'user' ? 'Customer' : 'Assistant'}: ${m.content}`)\n    .join('\\n');\n  fullSystemPrompt += `\\n\\n## Conversation so far\\n${transcript}`;\n}\n\nconst currentMessage = history[history.length - 1]?.content || ctx.currentMessage || '';\n\nreturn [{ json: { ...ctx, fullSystemPrompt, currentMessage } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 450],
+      "id": "c1d2e3f4-0005-0000-0000-000000000001",
+      "name": "Build Agent Context"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.currentMessage }}",
+        "options": {
+          "systemMessage": "={{ $json.fullSystemPrompt }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [1000, 450],
+      "id": "c1d2e3f4-0006-0000-0000-000000000001",
+      "name": "AI Booking Agent"
+    },
+    {
+      "parameters": {
+        "model": "={{ $('Build Agent Context').item.json.aiModel || 'gpt-4o-mini' }}",
+        "options": {
+          "temperature": "={{ $('Build Agent Context').item.json.aiTemperature ?? 0.7 }}",
+          "maxTokens": "={{ $('Build Agent Context').item.json.aiMaxTokens ?? 1000 }}"
+        }
+      },
+      "credentials": {
+        "openAiApi": { "id": "openai-creds", "name": "OpenAI account" }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [750, 250],
+      "id": "c1d2e3f4-0007-0000-0000-000000000001",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "name": "check_slots",
+        "description": "Check available appointment time slots for a service on a specific date. Call this before presenting any time options to the customer.",
+        "method": "GET",
+        "url": "={{ $env.APP_URL }}/api/booking/slots",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "tenantId",
+              "value": "={{ $('Build Agent Context').item.json.tenantId }}"
+            },
+            {
+              "name": "serviceId",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('serviceId', 'The ID of the service to check availability for', 'string') }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'The date to check in YYYY-MM-DD format', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [750, 650],
+      "id": "c1d2e3f4-0008-0000-0000-000000000001",
+      "name": "check_slots"
+    },
+    {
+      "parameters": {
+        "name": "book_appointment",
+        "description": "Book an appointment for a customer. Only call after confirming: service, date, time, customer name, and phone number. Email is optional.",
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/booking/create",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $env.N8N_INTERNAL_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenantId",
+              "value": "={{ $('Build Agent Context').item.json.tenantId }}"
+            },
+            {
+              "name": "conversationId",
+              "value": "={{ $('Build Agent Context').item.json.conversationId }}"
+            },
+            {
+              "name": "serviceId",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('serviceId', 'Service ID to book', 'string') }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'Date in YYYY-MM-DD format', 'string') }}"
+            },
+            {
+              "name": "time",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('time', 'Time in HH:MM (24-hour)', 'string') }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('name', 'Customer full name', 'string') }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('phone', 'Customer phone number', 'string') }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('email', 'Customer email (optional)', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1250, 650],
+      "id": "c1d2e3f4-0009-0000-0000-000000000001",
+      "name": "book_appointment"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/n8n/save-reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $env.N8N_INTERNAL_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversationId",
+              "value": "={{ $('Build Agent Context').item.json.conversationId }}"
+            },
+            {
+              "name": "tenantId",
+              "value": "={{ $('Build Agent Context').item.json.tenantId }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $('AI Booking Agent').item.json.output }}"
+            },
+            {
+              "name": "provider",
+              "value": "={{ $('Build Agent Context').item.json.aiProvider }}"
+            },
+            {
+              "name": "model",
+              "value": "={{ $('Build Agent Context').item.json.aiModel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 450],
+      "id": "c1d2e3f4-0010-0000-0000-000000000001",
+      "name": "Save AI Reply"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $('AI Booking Agent').item.json.output, conversationId: $('Build Agent Context').item.json.conversationId }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1500, 450],
+      "id": "c1d2e3f4-0011-0000-0000-000000000001",
+      "name": "Respond with Reply"
+    }
+  ],
+  "connections": {
+    "Receive Web Chat": {
+      "main": [
+        [{ "node": "Get Chat Context", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Chat Context": {
+      "main": [
+        [{ "node": "Context Valid?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Context Valid?": {
+      "main": [
+        [{ "node": "Build Agent Context", "type": "main", "index": 0 }],
+        [{ "node": "Respond Not Found", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Agent Context": {
+      "main": [
+        [{ "node": "AI Booking Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Booking Agent": {
+      "main": [
+        [{ "node": "Save AI Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save AI Reply": {
+      "main": [
+        [{ "node": "Respond with Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [{ "node": "AI Booking Agent", "type": "ai_languageModel", "index": 0 }]
+      ]
+    },
+    "check_slots": {
+      "ai_tool": [
+        [{ "node": "AI Booking Agent", "type": "ai_tool", "index": 0 }]
+      ]
+    },
+    "book_appointment": {
+      "ai_tool": [
+        [{ "node": "AI Booking Agent", "type": "ai_tool", "index": 1 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

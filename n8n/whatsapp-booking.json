@@ -1,0 +1,417 @@
+{
+  "name": "WhatsApp Booking — Evolution API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "id": "a1b2c3d4-0001-0000-0000-000000000001",
+      "name": "Receive WhatsApp Webhook",
+      "webhookId": "whatsapp-booking"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse an Evolution API messages.upsert payload.\n// Returns { skip, instanceName, from, text, fromMe, pushName }\nconst body = $input.first().json;\n\n// Only handle message events\nconst event = (body.event || '').toUpperCase();\nif (event && event !== 'MESSAGES_UPSERT' && event !== 'MESSAGES_UPDATE') {\n  return [{ json: { skip: true, reason: 'not a message event' } }];\n}\n\nconst instanceName = body.instance || body.instanceName || '';\nconst data = body.data || {};\nconst msgs = Array.isArray(data.messages)\n  ? data.messages\n  : (data.message ? [data] : (body.messages ? body.messages : []));\n\nif (!msgs.length) {\n  return [{ json: { skip: true, reason: 'no messages array' } }];\n}\n\nconst first = msgs[0];\nconst key = first.key || {};\nconst fromMe = key.fromMe === true;\n\n// Strip @s.whatsapp.net / @g.us suffix\nconst remoteJid = key.remoteJid || '';\nconst from = remoteJid.replace(/@[^@]+$/, '');\n\n// Extract text from various Evolution API message types\nconst msg = first.message || {};\nconst text =\n  msg.conversation ||\n  msg.extendedTextMessage?.text ||\n  msg.buttonsResponseMessage?.selectedDisplayText ||\n  msg.listResponseMessage?.singleSelectReply?.selectedRowId ||\n  '';\n\nconst pushName = first.pushName || null;\n\nif (!text) {\n  return [{ json: { skip: true, reason: 'no text content' } }];\n}\n\nreturn [{ json: { skip: false, instanceName, from, text, fromMe, pushName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "id": "a1b2c3d4-0002-0000-0000-000000000001",
+      "name": "Parse Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "skip-true",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            },
+            {
+              "id": "from-me",
+              "leftValue": "={{ $json.fromMe }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "id": "a1b2c3d4-0003-0000-0000-000000000001",
+      "name": "Skip or fromMe?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 150],
+      "id": "a1b2c3d4-0004-0000-0000-000000000001",
+      "name": "Respond OK (skip)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 450],
+      "id": "a1b2c3d4-0005-0000-0000-000000000001",
+      "name": "Respond OK"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/n8n/context",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $env.N8N_INTERNAL_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "channel", "value": "WHATSAPP" },
+            { "name": "instanceName", "value": "={{ $('Parse Payload').item.json.instanceName }}" },
+            { "name": "from", "value": "={{ $('Parse Payload').item.json.from }}" },
+            { "name": "text", "value": "={{ $('Parse Payload').item.json.text }}" },
+            { "name": "pushName", "value": "={{ $('Parse Payload').item.json.pushName }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 450],
+      "id": "a1b2c3d4-0006-0000-0000-000000000001",
+      "name": "Get Booking Context"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "tenant-present",
+              "leftValue": "={{ $json.tenantId }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 450],
+      "id": "a1b2c3d4-0007-0000-0000-000000000001",
+      "name": "Context Valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine system prompt with conversation history.\n// History already includes the user's latest message (saved by /api/n8n/context).\n// We exclude the last entry (current turn) from the transcript and pass it as the\n// live prompt text so the AI Agent processes it as the active user input.\n\nconst ctx = $input.first().json;\nconst history = ctx.history || [];\n\n// All messages except the very last one form the prior conversation transcript\nconst prior = history.slice(0, -1);\n\nlet fullSystemPrompt = ctx.systemPrompt;\nif (prior.length > 0) {\n  const transcript = prior\n    .map((m) => `${m.role === 'user' ? 'Customer' : 'Assistant'}: ${m.content}`)\n    .join('\\n');\n  fullSystemPrompt += `\\n\\n## Conversation so far\\n${transcript}`;\n}\n\n// The current user message is the last history entry\nconst currentMessage = history[history.length - 1]?.content || ctx.currentMessage || '';\n\nreturn [{ json: { ...ctx, fullSystemPrompt, currentMessage } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300],
+      "id": "a1b2c3d4-0008-0000-0000-000000000001",
+      "name": "Build Agent Context"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.currentMessage }}",
+        "options": {
+          "systemMessage": "={{ $json.fullSystemPrompt }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [1750, 300],
+      "id": "a1b2c3d4-0009-0000-0000-000000000001",
+      "name": "AI Booking Agent"
+    },
+    {
+      "parameters": {
+        "model": "={{ $('Build Agent Context').item.json.aiModel || 'gpt-4o-mini' }}",
+        "options": {
+          "temperature": "={{ $('Build Agent Context').item.json.aiTemperature ?? 0.7 }}",
+          "maxTokens": "={{ $('Build Agent Context').item.json.aiMaxTokens ?? 1000 }}"
+        }
+      },
+      "credentials": {
+        "openAiApi": { "id": "openai-creds", "name": "OpenAI account" }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1500, 100],
+      "id": "a1b2c3d4-0010-0000-0000-000000000001",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "name": "check_slots",
+        "description": "Check available appointment time slots for a service on a specific date. Call this before presenting any time options to the customer. Returns a list of available slots.",
+        "method": "GET",
+        "url": "={{ $env.APP_URL }}/api/booking/slots",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "tenantId",
+              "value": "={{ $('Build Agent Context').item.json.tenantId }}"
+            },
+            {
+              "name": "serviceId",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('serviceId', 'The ID of the service to check availability for', 'string') }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'The date to check in YYYY-MM-DD format', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1500, 500],
+      "id": "a1b2c3d4-0011-0000-0000-000000000001",
+      "name": "check_slots"
+    },
+    {
+      "parameters": {
+        "name": "book_appointment",
+        "description": "Book an appointment for a customer. Only call this after you have confirmed: the service ID, date, time slot, customer name, and phone number. Email is optional.",
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/booking/create",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $env.N8N_INTERNAL_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenantId",
+              "value": "={{ $('Build Agent Context').item.json.tenantId }}"
+            },
+            {
+              "name": "conversationId",
+              "value": "={{ $('Build Agent Context').item.json.conversationId }}"
+            },
+            {
+              "name": "serviceId",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('serviceId', 'Service ID to book', 'string') }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'Appointment date in YYYY-MM-DD format', 'string') }}"
+            },
+            {
+              "name": "time",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('time', 'Appointment time in HH:MM format (24-hour)', 'string') }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('name', 'Customer full name', 'string') }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('phone', 'Customer phone number', 'string') }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('email', 'Customer email address (optional, leave empty if not provided)', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [2000, 500],
+      "id": "a1b2c3d4-0012-0000-0000-000000000001",
+      "name": "book_appointment"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/n8n/save-reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $env.N8N_INTERNAL_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversationId",
+              "value": "={{ $('Build Agent Context').item.json.conversationId }}"
+            },
+            {
+              "name": "tenantId",
+              "value": "={{ $('Build Agent Context').item.json.tenantId }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $('AI Booking Agent').item.json.output }}"
+            },
+            {
+              "name": "provider",
+              "value": "={{ $('Build Agent Context').item.json.aiProvider }}"
+            },
+            {
+              "name": "model",
+              "value": "={{ $('Build Agent Context').item.json.aiModel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300],
+      "id": "a1b2c3d4-0013-0000-0000-000000000001",
+      "name": "Save AI Reply"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($('Build Agent Context').item.json.evolutionApiUrl || $env.EVOLUTION_API_URL).replace(/\\/$/, '') + '/message/sendText/' + $('Build Agent Context').item.json.evolutionInstanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Build Agent Context').item.json.evolutionApiKey }}"
+            },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Build Agent Context').item.json.to }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('AI Booking Agent').item.json.output }}"
+            }
+          ]
+        },
+        "options": { "continueOnFail": true }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 300],
+      "id": "a1b2c3d4-0014-0000-0000-000000000001",
+      "name": "Send WhatsApp Reply"
+    }
+  ],
+  "connections": {
+    "Receive WhatsApp Webhook": {
+      "main": [
+        [{ "node": "Parse Payload", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Payload": {
+      "main": [
+        [{ "node": "Skip or fromMe?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Skip or fromMe?": {
+      "main": [
+        [{ "node": "Respond OK (skip)", "type": "main", "index": 0 }],
+        [{ "node": "Respond OK", "type": "main", "index": 0 }]
+      ]
+    },
+    "Respond OK": {
+      "main": [
+        [{ "node": "Get Booking Context", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Booking Context": {
+      "main": [
+        [{ "node": "Context Valid?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Context Valid?": {
+      "main": [
+        [{ "node": "Build Agent Context", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Build Agent Context": {
+      "main": [
+        [{ "node": "AI Booking Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Booking Agent": {
+      "main": [
+        [{ "node": "Save AI Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save AI Reply": {
+      "main": [
+        [{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [{ "node": "AI Booking Agent", "type": "ai_languageModel", "index": 0 }]
+      ]
+    },
+    "check_slots": {
+      "ai_tool": [
+        [{ "node": "AI Booking Agent", "type": "ai_tool", "index": 0 }]
+      ]
+    },
+    "book_appointment": {
+      "ai_tool": [
+        [{ "node": "AI Booking Agent", "type": "ai_tool", "index": 1 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
