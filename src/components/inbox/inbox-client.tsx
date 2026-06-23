@@ -305,7 +305,7 @@ export function InboxClient({
 
       {/* Right: Panel */}
       {selectedConversation && (
-        <div className="w-[320px] shrink-0 overflow-hidden">
+        <div className="hidden lg:block w-[320px] shrink-0 overflow-hidden">
           <RightPanel
             snapshot={customerSnapshot}
             aiActivity={aiActivity}
