@@ -132,7 +132,8 @@ export async function POST(request: NextRequest) {
           estimatedCostUsd: estimateCostUsd(
             aiResponse.provider,
             aiResponse.model,
-            aiResponse.totalTokens
+            aiResponse.promptTokens,
+            aiResponse.completionTokens
           ),
           isByok: !!apiKey,
         },

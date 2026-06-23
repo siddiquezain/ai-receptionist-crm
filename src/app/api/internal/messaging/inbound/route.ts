@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       } else {
         await tx.customer.update({
           where: { id: customer.id },
-          data: { updatedAt: new Date() },
+          data: { lastSeenAt: new Date() },
         });
       }
 
