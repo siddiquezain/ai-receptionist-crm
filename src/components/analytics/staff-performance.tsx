@@ -1,5 +1,13 @@
 import type { StaffPerformanceRow } from "@/lib/analytics-queries";
 import { Users } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export function StaffPerformance({ data }: { data: StaffPerformanceRow[] }) {
   const maxTotal = Math.max(...data.map((r) => r.total), 1);
@@ -19,22 +27,22 @@ export function StaffPerformance({ data }: { data: StaffPerformanceRow[] }) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b border-[var(--border)]">
                 {["Staff Member", "Completed", "Cancelled", "No Show", "Total", "Rate"].map(
                   (h) => (
-                    <th
+                    <TableHead
                       key={h}
-                      className="px-4 py-2 text-left text-xs font-medium text-[var(--text-muted)]"
+                      className="px-4 py-2 text-xs font-medium text-[var(--text-muted)]"
                     >
                       {h}
-                    </th>
+                    </TableHead>
                   )
                 )}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.map((row) => {
                 const rate =
                   row.total > 0
@@ -43,23 +51,23 @@ export function StaffPerformance({ data }: { data: StaffPerformanceRow[] }) {
                 const barWidth = Math.round((row.total / maxTotal) * 100);
 
                 return (
-                  <tr
+                  <TableRow
                     key={row.id}
                     className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg)]"
                   >
-                    <td className="px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
+                    <TableCell className="px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
                       {row.name}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--success)]">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--success)]">
                       {row.completed}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--danger)]">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--danger)]">
                       {row.cancelled}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--warning)]">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--warning)]">
                       {row.noShow}
-                    </td>
-                    <td className="px-4 py-2.5">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm tabular-nums text-[var(--text-primary)]">
                           {row.total}
@@ -71,8 +79,8 @@ export function StaffPerformance({ data }: { data: StaffPerformanceRow[] }) {
                           />
                         </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-2.5">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
                       <span
                         className={`font-mono text-sm tabular-nums ${
                           rate >= 70
@@ -84,12 +92,12 @@ export function StaffPerformance({ data }: { data: StaffPerformanceRow[] }) {
                       >
                         {rate}%
                       </span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

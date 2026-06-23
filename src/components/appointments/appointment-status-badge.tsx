@@ -1,46 +1,17 @@
 import { AppointmentStatus } from "@prisma/client";
-import { cn } from "@/lib/utils";
-
-const STATUS_CONFIG: Record<AppointmentStatus, { label: string; className: string }> = {
-  PENDING: {
-    label: "Pending",
-    className: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20",
-  },
-  CONFIRMED: {
-    label: "Confirmed",
-    className: "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20",
-  },
-  RESCHEDULED: {
-    label: "Rescheduled",
-    className: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20",
-  },
-  CANCELLED: {
-    label: "Cancelled",
-    className: "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/20",
-  },
-  NO_SHOW: {
-    label: "No Show",
-    className: "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/20",
-  },
-  COMPLETED: {
-    label: "Completed",
-    className:
-      "bg-[var(--text-muted)]/10 text-[var(--text-muted)] border-[var(--text-muted)]/20",
-  },
-};
+import { getStatusConfig } from "@/lib/appointment-status";
 
 interface AppointmentStatusBadgeProps {
   status: AppointmentStatus;
+  className?: string;
 }
 
-export function AppointmentStatusBadge({ status }: AppointmentStatusBadgeProps) {
-  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.PENDING;
+export function AppointmentStatusBadge({ status, className }: AppointmentStatusBadgeProps) {
+  const config = getStatusConfig(status);
   return (
     <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
-        config.className
-      )}
+      aria-label={`Status: ${config.label}`}
+      className={`inline-flex items-center rounded-[4px] border px-2 py-0.5 text-xs font-medium ${config.className} ${className ?? ""}`}
     >
       {config.label}
     </span>

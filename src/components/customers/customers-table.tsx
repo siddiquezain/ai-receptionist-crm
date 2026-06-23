@@ -6,6 +6,14 @@ import { toast } from "sonner";
 import { Users, Trash2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { CustomerAvatar } from "./customer-avatar";
 import { updateCustomer, deleteCustomer } from "@/lib/actions/customers";
 import { timeAgo } from "@/lib/utils";
@@ -171,9 +179,9 @@ export function CustomersTable({
   return (
     <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)]">
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-[var(--border)]">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b border-[var(--border)]">
               {[
                 { key: "avatar", label: "" },
                 { key: "name", label: "Name" },
@@ -184,19 +192,19 @@ export function CustomersTable({
                 { key: "appts", label: "Appts" },
                 { key: "actions", label: "" },
               ].map(({ key, label }) => (
-                <th key={key} className="px-3 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]">
+                <TableHead key={key} className="px-3 py-2.5 text-xs font-medium text-[var(--text-muted)]">
                   {label}
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {customers.map((customer) => (
-              <tr
+              <TableRow
                 key={customer.id}
                 className="border-b border-[var(--border)] last:border-0 transition-colors hover:bg-[var(--bg)]"
               >
-                <td
+                <TableCell
                   className="cursor-pointer px-3 py-2.5"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
                   tabIndex={0}
@@ -209,9 +217,9 @@ export function CustomersTable({
                   }}
                 >
                   <CustomerAvatar name={customer.name} size="sm" />
-                </td>
+                </TableCell>
 
-                <td className="px-3 py-2.5">
+                <TableCell className="px-3 py-2.5">
                   {editingId === customer.id ? (
                     <Input
                       ref={nameInputRef}
@@ -230,9 +238,9 @@ export function CustomersTable({
                       {customer.name}
                     </button>
                   )}
-                </td>
+                </TableCell>
 
-                <td
+                <TableCell
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
                   tabIndex={0}
@@ -245,9 +253,9 @@ export function CustomersTable({
                   }}
                 >
                   {customer.email ?? "—"}
-                </td>
+                </TableCell>
 
-                <td
+                <TableCell
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
                   tabIndex={0}
@@ -260,9 +268,9 @@ export function CustomersTable({
                   }}
                 >
                   {customer.phone ?? "—"}
-                </td>
+                </TableCell>
 
-                <td
+                <TableCell
                   className="px-3 py-2.5"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -305,9 +313,9 @@ export function CustomersTable({
                       </button>
                     )}
                   </div>
-                </td>
+                </TableCell>
 
-                <td
+                <TableCell
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
                   tabIndex={0}
@@ -320,9 +328,9 @@ export function CustomersTable({
                   }}
                 >
                   {customer.lastSeenAt ? timeAgo(customer.lastSeenAt) : "—"}
-                </td>
+                </TableCell>
 
-                <td
+                <TableCell
                   className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
                   onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
                   tabIndex={0}
@@ -335,9 +343,9 @@ export function CustomersTable({
                   }}
                 >
                   {customer._count.appointments}
-                </td>
+                </TableCell>
 
-                <td
+                <TableCell
                   className="px-3 py-2.5"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -370,11 +378,11 @@ export function CustomersTable({
                       <Trash2 className="size-3.5 text-[var(--text-muted)]" />
                     </Button>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {hasMore && (
