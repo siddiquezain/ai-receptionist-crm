@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import React, { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   User,
@@ -167,7 +167,7 @@ export function CommandPalette({ tenantId, tenantSlug }: CommandPaletteProps) {
 
           {showResults &&
             results.map((section, idx) => (
-              <>
+              <React.Fragment key={`section-${section.id}`}>
                 {idx > 0 && <CommandSeparator key={`sep-${section.id}`} />}
                 <CommandGroup key={section.id} heading={section.label}>
                   {section.items.map((item) => {
@@ -193,7 +193,7 @@ export function CommandPalette({ tenantId, tenantSlug }: CommandPaletteProps) {
                     )
                   })}
                 </CommandGroup>
-              </>
+              </React.Fragment>
             ))}
         </CommandList>
       </Command>
