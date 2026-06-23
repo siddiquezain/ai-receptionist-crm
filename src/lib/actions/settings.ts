@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantAccess, AuthError } from "@/lib/server-auth";
 import { requirePermission } from "@/lib/permissions";
 import { z } from "zod";
+import { encrypt } from "@/lib/crypto";
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ const aiSettingsSchema = z.object({
   systemPrompt: z.string().max(4000).optional(),
   autoBook: z.coerce.boolean(),
   requireConfirm: z.coerce.boolean(),
+  byokApiKey: z.string().optional(),
 });
 
 export async function updateAISettings(
@@ -213,6 +215,7 @@ export async function updateAISettings(
     systemPrompt: formData.get("systemPrompt") || undefined,
     autoBook: formData.get("autoBook") === "true",
     requireConfirm: formData.get("requireConfirm") === "true",
+    byokApiKey: (formData.get("byokApiKey") as string | null) || undefined,
   };
 
   const parsed = aiSettingsSchema.safeParse(raw);
@@ -221,6 +224,11 @@ export async function updateAISettings(
   }
 
   const { tenantId, ...data } = parsed.data;
+
+  // Encrypt BYOK API key before storing — never store plaintext
+  if (data.byokApiKey) {
+    data.byokApiKey = encrypt(data.byokApiKey);
+  }
 
   try {
     const { role } = await requireTenantAccess(tenantId);
