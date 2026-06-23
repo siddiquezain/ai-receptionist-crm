@@ -12,7 +12,9 @@ import type {
   StaffOption,
   ServiceOption,
   CustomerOption,
+  AppointmentSortValue,
 } from "@/lib/appointments-queries";
+import type { SortOption } from "@/lib/sorting";
 
 interface AppointmentsClientProps {
   appointments: AppointmentListItem[];
@@ -23,6 +25,8 @@ interface AppointmentsClientProps {
   tenantId: string;
   tenantSlug: string;
   timezone: string;
+  sortOptions: SortOption<AppointmentSortValue>[];
+  defaultSort: AppointmentSortValue;
 }
 
 export function AppointmentsClient({
@@ -34,6 +38,8 @@ export function AppointmentsClient({
   tenantId,
   tenantSlug,
   timezone,
+  sortOptions,
+  defaultSort,
 }: AppointmentsClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -80,7 +86,7 @@ export function AppointmentsClient({
       </div>
 
       {/* Filters */}
-      <AppointmentsFilters staff={staff} />
+      <AppointmentsFilters staff={staff} sortOptions={sortOptions} defaultSort={defaultSort} />
 
       {/* Table */}
       <AppointmentsTable

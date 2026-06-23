@@ -7,7 +7,9 @@ import {
   getStaffOptions,
   getServiceOptions,
   getCustomerOptions,
+  APPOINTMENT_SORT_OPTIONS,
 } from "@/lib/appointments-queries";
+import { parseSortParams } from "@/lib/sorting";
 import { AppointmentsClient } from "@/components/appointments/appointments-client";
 
 export const metadata: Metadata = { title: "Appointments" };
@@ -40,13 +42,19 @@ export default async function AppointmentsPage({ params, searchParams }: Props) 
   const staffId = typeof sp.staffId === "string" ? sp.staffId : undefined;
   const page =
     typeof sp.page === "string" ? Math.max(1, parseInt(sp.page, 10)) : 1;
+  const q = typeof sp.q === "string" ? sp.q : "";
 
   const from = fromParam ? new Date(fromParam + "T00:00:00") : undefined;
   const to = toParam ? new Date(toParam + "T23:59:59") : undefined;
 
+  const spStrings = Object.fromEntries(
+    Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])
+  ) as Record<string, string | undefined>;
+  const { sort } = parseSortParams(spStrings, APPOINTMENT_SORT_OPTIONS, "date_desc");
+
   const [{ appointments, hasMore }, staff, services, customers] =
     await Promise.all([
-      getAppointments(tenant.id, { status, from, to, staffId, page }),
+      getAppointments(tenant.id, { status, from, to, staffId, page, q, sort }),
       getStaffOptions(tenant.id),
       getServiceOptions(tenant.id),
       getCustomerOptions(tenant.id),
@@ -63,6 +71,8 @@ export default async function AppointmentsPage({ params, searchParams }: Props) 
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
         timezone={tenant.timezone}
+        sortOptions={APPOINTMENT_SORT_OPTIONS}
+        defaultSort={sort}
       />
     </div>
   );

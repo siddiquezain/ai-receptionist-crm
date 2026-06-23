@@ -1,5 +1,7 @@
 import { AppointmentStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import type { SortOption } from "./sorting";
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
@@ -40,12 +42,34 @@ export type CustomerOption = {
   phone: string | null;
 };
 
+export type AppointmentSortValue = "date_desc" | "date_asc" | "customer" | "status";
+
+export const APPOINTMENT_SORT_OPTIONS: SortOption<AppointmentSortValue>[] = [
+  { value: "date_desc", label: "Newest first", defaultDir: "desc" },
+  { value: "date_asc", label: "Oldest first", defaultDir: "asc" },
+  { value: "customer", label: "Customer name", defaultDir: "asc" },
+  { value: "status", label: "Status", defaultDir: "asc" },
+];
+
+const APPOINTMENT_ORDER_MAP: Record<
+  AppointmentSortValue,
+  Prisma.AppointmentOrderByWithRelationInput
+> = {
+  date_desc: { startAt: "desc" },
+  date_asc: { startAt: "asc" },
+  customer: { customer: { name: "asc" } },
+  status: { status: "asc" },
+};
+
 export type AppointmentFilters = {
   status?: AppointmentStatus;
   from?: Date;
   to?: Date;
   staffId?: string;
   page?: number;
+  q?: string;
+  sort?: AppointmentSortValue;
+  dir?: "asc" | "desc";
 };
 
 // ─── Query functions ──────────────────────────────────────────────────────────
@@ -54,7 +78,7 @@ export async function getAppointments(
   tenantId: string,
   filters: AppointmentFilters = {}
 ): Promise<{ appointments: AppointmentListItem[]; hasMore: boolean }> {
-  const { status, from, to, staffId, page = 1 } = filters;
+  const { status, from, to, staffId, page = 1, q, sort } = filters;
 
   if (from !== undefined && to !== undefined && from > to) {
     return { appointments: [], hasMore: false };
@@ -75,13 +99,22 @@ export async function getAppointments(
         }
       : {}),
     ...(staffId !== undefined ? { teamMemberId: staffId } : {}),
+    ...(q
+      ? {
+          OR: [
+            { customer: { name: { contains: q, mode: "insensitive" as const } } },
+            { customer: { phone: { contains: q, mode: "insensitive" as const } } },
+            { service: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
   };
 
   const [appointments, total] = await Promise.all([
     prisma.appointment.findMany({
       where,
       take,
-      orderBy: { startAt: "asc" },
+      orderBy: APPOINTMENT_ORDER_MAP[sort ?? "date_desc"],
       select: {
         id: true,
         startAt: true,

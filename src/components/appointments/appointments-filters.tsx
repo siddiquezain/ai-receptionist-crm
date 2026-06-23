@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
+import { Search } from "lucide-react";
 import { AppointmentStatus } from "@prisma/client";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,10 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { StaffOption } from "@/lib/appointments-queries";
+import { SortDropdown } from "@/components/ui/sort-dropdown";
+import type { StaffOption, AppointmentSortValue } from "@/lib/appointments-queries";
+import type { SortOption } from "@/lib/sorting";
 
 interface AppointmentsFiltersProps {
   staff: StaffOption[];
+  sortOptions: SortOption<AppointmentSortValue>[];
+  defaultSort: AppointmentSortValue;
 }
 
 const STATUS_TABS = [
@@ -25,7 +30,7 @@ const STATUS_TABS = [
   { label: "Cancelled", value: AppointmentStatus.CANCELLED },
 ] as const;
 
-export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
+export function AppointmentsFilters({ staff, sortOptions, defaultSort }: AppointmentsFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -53,6 +58,24 @@ export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+        <Input
+          type="text"
+          placeholder="Search customer, service…"
+          defaultValue={searchParams.get("q") ?? ""}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              updateParams({ q: (e.target as HTMLInputElement).value });
+            }
+          }}
+          onBlur={(e) => updateParams({ q: e.target.value })}
+          className="h-7 pl-8 w-52 text-xs"
+          aria-label="Search appointments"
+        />
+      </div>
+
       {/* Status tabs */}
       <div className="flex items-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] p-0.5 gap-0.5">
         {STATUS_TABS.map((tab) => (
@@ -106,6 +129,9 @@ export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
           </SelectContent>
         </Select>
       )}
+
+      {/* Sort dropdown */}
+      <SortDropdown options={sortOptions} defaultSort={defaultSort} />
     </div>
   );
 }
