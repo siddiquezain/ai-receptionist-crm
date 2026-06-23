@@ -1,5 +1,7 @@
 import { AppointmentStatus, ConversationChannel, ConversationStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import type { SortOption } from "./sorting";
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
@@ -43,9 +45,27 @@ export type CustomerConversationItem = {
   createdAt: Date;
 };
 
+export type CustomerSortValue = "name" | "last_seen" | "appointments";
+
+export const CUSTOMER_SORT_OPTIONS: SortOption<CustomerSortValue>[] = [
+  { value: "name", label: "Name A→Z", defaultDir: "asc" },
+  { value: "last_seen", label: "Recently seen", defaultDir: "desc" },
+  { value: "appointments", label: "Most appointments", defaultDir: "desc" },
+];
+
+const CUSTOMER_ORDER_MAP: Record<
+  CustomerSortValue,
+  Prisma.CustomerOrderByWithRelationInput
+> = {
+  name: { name: "asc" },
+  last_seen: { lastSeenAt: "desc" },
+  appointments: { appointments: { _count: "desc" } },
+};
+
 export type CustomerFilters = {
   search?: string;
   page?: number;
+  sort?: CustomerSortValue;
 };
 
 // ─── Query functions ──────────────────────────────────────────────────────────
@@ -54,7 +74,7 @@ export async function getCustomers(
   tenantId: string,
   filters: CustomerFilters = {}
 ): Promise<{ customers: CustomerListItem[]; hasMore: boolean }> {
-  const { search, page = 1 } = filters;
+  const { search, page = 1, sort = "name" } = filters;
   const take = page * 20;
 
   const where = {
@@ -84,7 +104,7 @@ export async function getCustomers(
         lastSeenAt: true,
         _count: { select: { appointments: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: CUSTOMER_ORDER_MAP[sort],
       take,
     }),
     prisma.customer.count({ where }),

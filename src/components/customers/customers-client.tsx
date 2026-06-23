@@ -5,9 +5,11 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SortDropdown } from "@/components/ui/sort-dropdown";
 import { CustomersTable } from "./customers-table";
 import { CustomerCreateSlideOver } from "./customer-create-slide-over";
-import type { CustomerListItem } from "@/lib/customers-queries";
+import type { CustomerListItem, CustomerSortValue } from "@/lib/customers-queries";
+import type { SortOption } from "@/lib/sorting";
 
 interface CustomersClientProps {
   customers: CustomerListItem[];
@@ -15,6 +17,8 @@ interface CustomersClientProps {
   tenantId: string;
   tenantSlug: string;
   search: string;
+  sortOptions: SortOption<CustomerSortValue>[];
+  defaultSort: CustomerSortValue;
 }
 
 export function CustomersClient({
@@ -23,6 +27,8 @@ export function CustomersClient({
   tenantId,
   tenantSlug,
   search,
+  sortOptions,
+  defaultSort,
 }: CustomersClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -62,19 +68,22 @@ export function CustomersClient({
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
-        <Input
-          placeholder="Search customers…"
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") pushSearch(searchValue);
-          }}
-          onBlur={() => pushSearch(searchValue)}
-          className="pl-8 text-sm"
-        />
+      {/* Search + Sort */}
+      <div className="flex items-center gap-2">
+        <div className="relative max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Input
+            placeholder="Search customers…"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") pushSearch(searchValue);
+            }}
+            onBlur={() => pushSearch(searchValue)}
+            className="pl-8 text-sm"
+          />
+        </div>
+        <SortDropdown options={sortOptions} defaultSort={defaultSort} />
       </div>
 
       {/* Table */}

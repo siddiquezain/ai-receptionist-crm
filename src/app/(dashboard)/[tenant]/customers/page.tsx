@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getCustomers } from "@/lib/customers-queries";
+import { getCustomers, CUSTOMER_SORT_OPTIONS } from "@/lib/customers-queries";
+import { parseSortParams } from "@/lib/sorting";
 import { CustomersClient } from "@/components/customers/customers-client";
 
 export const metadata: Metadata = { title: "Customers" };
@@ -25,9 +26,15 @@ export default async function CustomersPage({ params, searchParams }: Props) {
   const page =
     typeof sp.page === "string" ? Math.max(1, parseInt(sp.page, 10)) : 1;
 
+  const spStrings = Object.fromEntries(
+    Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])
+  ) as Record<string, string | undefined>;
+  const { sort } = parseSortParams(spStrings, CUSTOMER_SORT_OPTIONS, "name");
+
   const { customers, hasMore } = await getCustomers(tenant.id, {
     search,
     page,
+    sort,
   });
 
   return (
@@ -38,6 +45,8 @@ export default async function CustomersPage({ params, searchParams }: Props) {
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
         search={search ?? ""}
+        sortOptions={CUSTOMER_SORT_OPTIONS}
+        defaultSort={sort}
       />
     </div>
   );
