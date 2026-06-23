@@ -24,19 +24,22 @@ export function RightPanel({
   const [tab, setTab] = useState<Tab>("customer");
 
   return (
-    <div className="flex h-full flex-col border-l border-[var(--border)]">
+    <div
+      className="flex h-full flex-col"
+      style={{ background: "var(--surface-raised)", borderLeft: "1px solid var(--border)" }}
+    >
       {/* Tab bar */}
-      <div className="flex border-b border-[var(--border)]">
+      <div className="flex" style={{ borderBottom: "1px solid var(--border)" }}>
         {(["customer", "ai"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={cn(
-              "flex-1 py-2.5 text-xs font-medium transition-colors",
+            className="flex-1 py-2.5 text-xs font-medium transition-colors"
+            style={
               tab === t
-                ? "border-b-2 border-[var(--accent)] text-[var(--accent)]"
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            )}
+                ? { color: "var(--accent)", borderBottom: "2px solid var(--accent)" }
+                : { color: "var(--text-muted)", borderBottom: "2px solid transparent" }
+            }
           >
             {t === "customer" ? "Customer" : "AI Activity"}
           </button>

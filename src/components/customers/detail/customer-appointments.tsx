@@ -9,59 +9,53 @@ interface CustomerAppointmentsProps {
   timezone: string;
 }
 
-export function CustomerAppointments({
-  appointments,
-  tenantSlug,
-  timezone,
-}: CustomerAppointmentsProps) {
+export function CustomerAppointments({ appointments, tenantSlug, timezone }: CustomerAppointmentsProps) {
   return (
-    <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)]">
-      <div className="border-b border-[var(--border)] px-4 py-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Appointments
-        </p>
+    <div
+      className="rounded-[var(--radius-lg)] overflow-hidden"
+      style={{
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-xs)",
+      }}
+    >
+      <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+        <p className="section-label">Appointments</p>
       </div>
 
       {appointments.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
+        <p className="px-5 py-10 text-center text-sm" style={{ color: "var(--text-muted)" }}>
           No appointments yet
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="data-table">
             <thead>
-              <tr className="border-b border-[var(--border)]">
+              <tr>
                 {["Service", "Staff", "Date", "Status"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2 text-left text-xs font-medium text-[var(--text-muted)]"
-                  >
-                    {h}
-                  </th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {appointments.map((appt) => (
-                <tr
-                  key={appt.id}
-                  className="border-b border-[var(--border)] last:border-0 transition-colors hover:bg-[var(--bg)]"
-                >
-                  <td className="px-4 py-2.5 text-sm text-[var(--text-primary)]">
+                <tr key={appt.id}>
+                  <td>
                     <Link
                       href={`/${tenantSlug}/appointments?highlight=${appt.id}`}
-                      className="hover:underline"
+                      className="font-medium transition-colors"
+                      style={{ color: "var(--text-primary)" }}
                     >
                       {appt.service.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5 text-sm text-[var(--text-muted)]">
+                  <td style={{ color: "var(--text-secondary)" }}>
                     {appt.teamMember?.name ?? "—"}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--text-muted)]">
+                  <td className="font-mono tabular-nums" style={{ color: "var(--text-secondary)" }}>
                     {formatDate(appt.startAt, timezone, "MMM d, h:mm a")}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td>
                     <AppointmentStatusBadge status={appt.status} />
                   </td>
                 </tr>

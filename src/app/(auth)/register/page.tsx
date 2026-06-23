@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ensureUserWithTenant } from "@/lib/auth-actions";
 import { registerSchema, type RegisterFormValues } from "@/validators/auth";
@@ -22,33 +23,20 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
-  });
+  } = useForm<RegisterFormValues>({ resolver: zodResolver(registerSchema) });
 
   async function onSubmit(values: RegisterFormValues) {
     setLoading(true);
     const supabase = createClient();
-
     const { data, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
       options: {
-        data: {
-          full_name: values.fullName,
-          business_name: values.businessName,
-        },
+        data: { full_name: values.fullName, business_name: values.businessName },
         emailRedirectTo: `${window.location.origin}/api/auth/callback`,
       },
     });
-
-    if (error) {
-      setLoading(false);
-      toast.error(error.message);
-      return;
-    }
-
-    // If session is immediately established (email confirmation disabled in Supabase project)
+    if (error) { setLoading(false); toast.error(error.message); return; }
     if (data.session) {
       try {
         const slug = await ensureUserWithTenant({
@@ -65,148 +53,102 @@ export default function RegisterPage() {
       }
       return;
     }
-
-    // Email confirmation required — show "check your email" state
     setLoading(false);
     setEmailSent(true);
   }
 
   if (emailSent) {
     return (
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[6px] p-8">
-        <div className="text-center space-y-3">
-          <div className="text-2xl">✉️</div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">
-            Check your email
-          </h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            We sent a confirmation link to your email. Click it to activate your
-            account and get started.
-          </p>
-          <p className="text-xs text-[var(--text-muted)] pt-2">
-            Already confirmed?{" "}
-            <Link
-              href="/login"
-              className="text-[var(--accent)] hover:underline"
-            >
-              Sign in
-            </Link>
-          </p>
+      <div
+        className="rounded-[var(--radius-xl)] p-7 text-center"
+        style={{
+          background: "var(--surface-raised)",
+          border: "1px solid var(--border)",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        <div
+          className="mx-auto mb-4 flex size-12 items-center justify-center rounded-[var(--radius-lg)]"
+          style={{
+            background: "var(--accent-subtle)",
+            border: "1px solid var(--accent-subtle-border)",
+          }}
+        >
+          <Mail className="size-5" style={{ color: "var(--accent)" }} />
         </div>
+        <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          Check your email
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+          We sent a confirmation link to your email. Click it to activate your account and get
+          started.
+        </p>
+        <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          Already confirmed?{" "}
+          <Link href="/login" className="font-medium" style={{ color: "var(--accent)" }}>
+            Sign in
+          </Link>
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[6px] p-8">
+    <div
+      className="rounded-[var(--radius-xl)] p-7"
+      style={{
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+        <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
           Create your account
         </h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">
-          Set up your business on Appointment SaaS in minutes.
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+          Set up your business in minutes.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="fullName"
-            className="text-sm text-[var(--text-primary)]"
-          >
-            Full name
-          </Label>
-          <Input
-            id="fullName"
-            type="text"
-            autoComplete="name"
-            placeholder="Jane Smith"
-            disabled={loading}
-            {...register("fullName")}
-            className={errors.fullName ? "border-[var(--danger)]" : ""}
-          />
-          {errors.fullName && (
-            <p className="text-xs text-[var(--danger)]">
-              {errors.fullName.message}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="businessName"
-            className="text-sm text-[var(--text-primary)]"
-          >
-            Business name
-          </Label>
-          <Input
-            id="businessName"
-            type="text"
-            autoComplete="organization"
-            placeholder="Smith & Co Salon"
-            disabled={loading}
-            {...register("businessName")}
-            className={errors.businessName ? "border-[var(--danger)]" : ""}
-          />
-          {errors.businessName && (
-            <p className="text-xs text-[var(--danger)]">
-              {errors.businessName.message}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="email"
-            className="text-sm text-[var(--text-primary)]"
-          >
-            Work email
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@company.com"
-            disabled={loading}
-            {...register("email")}
-            className={errors.email ? "border-[var(--danger)]" : ""}
-          />
-          {errors.email && (
-            <p className="text-xs text-[var(--danger)]">{errors.email.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="password"
-            className="text-sm text-[var(--text-primary)]"
-          >
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Min. 8 characters"
-            disabled={loading}
-            {...register("password")}
-            className={errors.password ? "border-[var(--danger)]" : ""}
-          />
-          {errors.password && (
-            <p className="text-xs text-[var(--danger)]">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
+        {(
+          [
+            { id: "fullName",     label: "Full name",      type: "text",     auto: "name",         placeholder: "Jane Smith" },
+            { id: "businessName", label: "Business name",  type: "text",     auto: "organization",  placeholder: "Smith & Co Salon" },
+            { id: "email",        label: "Work email",     type: "email",    auto: "email",         placeholder: "you@company.com" },
+            { id: "password",     label: "Password",       type: "password", auto: "new-password",  placeholder: "Min. 8 characters" },
+          ] as const
+        ).map(({ id, label, type, auto, placeholder }) => (
+          <div key={id} className="space-y-1.5">
+            <Label htmlFor={id} className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              {label}
+            </Label>
+            <Input
+              id={id}
+              type={type}
+              autoComplete={auto}
+              placeholder={placeholder}
+              disabled={loading}
+              {...register(id)}
+              className={errors[id] ? "border-[var(--danger)]" : ""}
+            />
+            {errors[id] && (
+              <p className="text-xs" style={{ color: "var(--danger)" }}>
+                {errors[id]?.message}
+              </p>
+            )}
+          </div>
+        ))}
 
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Creating account…" : "Create account"}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
+      <p className="mt-5 text-center text-sm" style={{ color: "var(--text-muted)" }}>
         Already have an account?{" "}
-        <Link href="/login" className="text-[var(--accent)] hover:underline">
+        <Link href="/login" className="font-medium" style={{ color: "var(--accent)" }}>
           Sign in
         </Link>
       </p>

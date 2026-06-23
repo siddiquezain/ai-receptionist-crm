@@ -1,6 +1,6 @@
 import { MessageSquare } from "lucide-react";
 import { ConversationChannel, ConversationStatus } from "@prisma/client";
-import { timeAgo, cn } from "@/lib/utils";
+import { timeAgo } from "@/lib/utils";
 import type { CustomerConversationItem } from "@/lib/customers-queries";
 
 const CHANNEL_LABEL: Record<ConversationChannel, string> = {
@@ -8,73 +8,54 @@ const CHANNEL_LABEL: Record<ConversationChannel, string> = {
   WHATSAPP: "WhatsApp",
 };
 
-const STATUS_CONFIG: Record<
-  ConversationStatus,
-  { label: string; className: string }
-> = {
-  OPEN: {
-    label: "Open",
-    className:
-      "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20",
-  },
-  RESOLVED: {
-    label: "Resolved",
-    className:
-      "bg-[var(--text-muted)]/10 text-[var(--text-muted)] border-[var(--text-muted)]/20",
-  },
-  ESCALATED: {
-    label: "Escalated",
-    className:
-      "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20",
-  },
-  ARCHIVED: {
-    label: "Archived",
-    className:
-      "bg-[var(--text-muted)]/10 text-[var(--text-muted)] border-[var(--text-muted)]/20",
-  },
+type StatusStyle = { label: string; bg: string; border: string; color: string };
+
+const STATUS_STYLE: Record<ConversationStatus, StatusStyle> = {
+  OPEN:      { label: "Open",     bg: "var(--success-subtle)", border: "var(--success-subtle-border)", color: "var(--success)" },
+  RESOLVED:  { label: "Resolved", bg: "var(--surface)",        border: "var(--border)",                color: "var(--text-muted)" },
+  ESCALATED: { label: "Escalated",bg: "var(--warning-subtle)", border: "var(--warning-subtle-border)", color: "var(--warning)" },
+  ARCHIVED:  { label: "Archived", bg: "var(--surface)",        border: "var(--border)",                color: "var(--text-muted)" },
 };
 
 interface CustomerConversationsProps {
   conversations: CustomerConversationItem[];
 }
 
-export function CustomerConversations({
-  conversations,
-}: CustomerConversationsProps) {
+export function CustomerConversations({ conversations }: CustomerConversationsProps) {
   return (
-    <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)]">
-      <div className="border-b border-[var(--border)] px-4 py-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Conversations
-        </p>
+    <div
+      className="rounded-[var(--radius-lg)] overflow-hidden"
+      style={{
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-xs)",
+      }}
+    >
+      <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+        <p className="section-label">Conversations</p>
       </div>
 
       {conversations.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
+        <p className="px-5 py-10 text-center text-sm" style={{ color: "var(--text-muted)" }}>
           No conversations yet
         </p>
       ) : (
-        <ul className="divide-y divide-[var(--border)]">
+        <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
           {conversations.map((conv) => {
-            const status = STATUS_CONFIG[conv.status] ?? STATUS_CONFIG.OPEN;
+            const s = STATUS_STYLE[conv.status] ?? STATUS_STYLE.OPEN;
             return (
-              <li
-                key={conv.id}
-                className="flex items-center gap-3 px-4 py-3"
-              >
-                <MessageSquare className="size-4 shrink-0 text-[var(--text-muted)]" />
-                <div className="flex-1 text-sm text-[var(--text-primary)]">
+              <li key={conv.id} className="flex items-center gap-3.5 px-5 py-3.5">
+                <MessageSquare className="size-4 shrink-0" style={{ color: "var(--text-muted)" }} />
+                <span className="flex-1 text-sm" style={{ color: "var(--text-primary)" }}>
                   {CHANNEL_LABEL[conv.channel] ?? conv.channel}
-                </div>
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
-                    status.className
-                  )}
-                >
-                  {status.label}
                 </span>
-                <span className="text-xs text-[var(--text-muted)]">
+                <span
+                  className="status-badge"
+                  style={{ background: s.bg, borderColor: s.border, color: s.color }}
+                >
+                  {s.label}
+                </span>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                   {timeAgo(conv.createdAt)}
                 </span>
               </li>

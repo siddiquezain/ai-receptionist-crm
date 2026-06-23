@@ -18,8 +18,8 @@ interface AppointmentsFiltersProps {
 }
 
 const STATUS_TABS = [
-  { label: "All", value: "" },
-  { label: "Pending", value: AppointmentStatus.PENDING },
+  { label: "All",       value: ""                          },
+  { label: "Pending",   value: AppointmentStatus.PENDING   },
   { label: "Confirmed", value: AppointmentStatus.CONFIRMED },
   { label: "Completed", value: AppointmentStatus.COMPLETED },
   { label: "Cancelled", value: AppointmentStatus.CANCELLED },
@@ -46,28 +46,43 @@ export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
     [router, pathname, searchParams]
   );
 
-  const currentStatus = searchParams.get("status") ?? "";
-  const currentFrom = searchParams.get("from") ?? "";
-  const currentTo = searchParams.get("to") ?? "";
-  const currentStaffId = searchParams.get("staffId") ?? "";
+  const currentStatus  = searchParams.get("status")  ?? "";
+  const currentFrom    = searchParams.get("from")     ?? "";
+  const currentTo      = searchParams.get("to")       ?? "";
+  const currentStaffId = searchParams.get("staffId")  ?? "";
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {/* Status tabs */}
-      <div className="flex items-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] p-0.5 gap-0.5">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => updateParams({ status: tab.value })}
-            className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors ${
-              currentStatus === tab.value
-                ? "bg-[var(--accent)] text-white"
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Status pill tabs */}
+      <div
+        className="flex items-center gap-px rounded-[var(--radius-md)] p-0.5"
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        {STATUS_TABS.map((tab) => {
+          const isActive = currentStatus === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => updateParams({ status: tab.value })}
+              className="rounded-[var(--radius-sm)] px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                isActive
+                  ? {
+                      background: "var(--surface-raised)",
+                      color: "var(--text-primary)",
+                      boxShadow: "var(--shadow-xs)",
+                      border: "1px solid var(--border)",
+                    }
+                  : { color: "var(--text-muted)" }
+              }
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Date range */}
@@ -78,7 +93,7 @@ export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
           onChange={(e) => updateParams({ from: e.target.value })}
           className="h-7 w-36 text-xs"
         />
-        <span className="text-xs text-[var(--text-muted)]">–</span>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>–</span>
         <Input
           type="date"
           value={currentTo}
@@ -91,7 +106,9 @@ export function AppointmentsFilters({ staff }: AppointmentsFiltersProps) {
       {staff.length > 0 && (
         <Select
           value={currentStaffId || "__all__"}
-          onValueChange={(v) => updateParams({ staffId: v === "__all__" ? "" : (v ?? "") })}
+          onValueChange={(v) =>
+            updateParams({ staffId: v === "__all__" ? "" : (v ?? "") })
+          }
         >
           <SelectTrigger className="h-7 w-36 text-xs">
             <SelectValue placeholder="All staff" />

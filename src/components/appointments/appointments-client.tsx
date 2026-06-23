@@ -67,30 +67,33 @@ export function AppointmentsClient({
   }, [router, pathname, searchParams]);
 
   return (
-    <>
+    <div className="min-h-full" style={{ background: "var(--bg)" }}>
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-          Appointments
-        </h1>
+      <div
+        className="flex items-center justify-between px-6 py-5"
+        style={{ borderBottom: "1px solid var(--border)" }}
+      >
+        <h1 className="page-title">Appointments</h1>
         <Button size="sm" onClick={handleCreateClick}>
           <Plus className="size-3.5" />
           New appointment
         </Button>
       </div>
 
-      {/* Filters */}
-      <AppointmentsFilters staff={staff} />
+      <div className="p-6 space-y-4">
+        {/* Filters */}
+        <AppointmentsFilters staff={staff} />
 
-      {/* Table */}
-      <AppointmentsTable
-        appointments={appointments}
-        timezone={timezone}
-        hasMore={hasMore}
-        onRowClick={handleRowClick}
-        onLoadMore={handleLoadMore}
-        onCreateClick={handleCreateClick}
-      />
+        {/* Table */}
+        <AppointmentsTable
+          appointments={appointments}
+          timezone={timezone}
+          hasMore={hasMore}
+          onRowClick={handleRowClick}
+          onLoadMore={handleLoadMore}
+          onCreateClick={handleCreateClick}
+        />
+      </div>
 
       {/* Slide-over */}
       <AppointmentSlideOver
@@ -103,6 +106,6 @@ export function AppointmentsClient({
         staff={staff}
         customers={customers}
       />
-    </>
+    </div>
   );
 }

@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { AppointmentStatus } from "@prisma/client";
 import {
   Sheet,
@@ -38,17 +38,17 @@ import type {
   CustomerOption,
 } from "@/lib/appointments-queries";
 
-// ─── Zod schema ───────────────────────────────────────────────────────────────
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
 const appointmentSchema = z
   .object({
-    serviceId: z.string().min(1, "Service is required"),
+    serviceId:    z.string().min(1, "Service is required"),
     teamMemberId: z.string().optional(),
-    startAt: z.string().min(1, "Start time is required"),
-    endAt: z.string().min(1, "End time is required"),
-    notes: z.string().optional(),
-    status: z.nativeEnum(AppointmentStatus),
-    customerId: z.string().optional(),
+    startAt:      z.string().min(1, "Start time is required"),
+    endAt:        z.string().min(1, "End time is required"),
+    notes:        z.string().optional(),
+    status:       z.nativeEnum(AppointmentStatus),
+    customerId:   z.string().optional(),
   })
   .refine((d) => new Date(d.endAt) > new Date(d.startAt), {
     message: "End time must be after start time",
@@ -57,13 +57,41 @@ const appointmentSchema = z
 
 type AppointmentFormData = z.infer<typeof appointmentSchema>;
 
-/** Format a Date to the value expected by <input type="datetime-local"> */
 function toDatetimeLocal(date: Date): string {
   return format(date, "yyyy-MM-dd'T'HH:mm");
 }
 
 function formatStatusLabel(status: AppointmentStatus): string {
   return status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " ");
+}
+
+// ─── Field wrapper ────────────────────────────────────────────────────────────
+
+function Field({
+  label,
+  error,
+  children,
+  required,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+        {label}
+        {required && <span style={{ color: "var(--danger)" }}> *</span>}
+      </label>
+      {children}
+      {error && (
+        <p className="text-xs" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -103,13 +131,8 @@ export function AppointmentSlideOver({
   const form = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
-      serviceId: "",
-      teamMemberId: "",
-      startAt: "",
-      endAt: "",
-      notes: "",
-      status: AppointmentStatus.PENDING,
-      customerId: "",
+      serviceId: "", teamMemberId: "", startAt: "", endAt: "",
+      notes: "", status: AppointmentStatus.PENDING, customerId: "",
     },
   });
 
@@ -117,13 +140,8 @@ export function AppointmentSlideOver({
     if (!open || isCreateMode) {
       setDetail(null);
       form.reset({
-        serviceId: "",
-        teamMemberId: "",
-        startAt: "",
-        endAt: "",
-        notes: "",
-        status: AppointmentStatus.PENDING,
-        customerId: "",
+        serviceId: "", teamMemberId: "", startAt: "", endAt: "",
+        notes: "", status: AppointmentStatus.PENDING, customerId: "",
       });
       setErrorBanner(null);
       setCustomerSearch("");
@@ -160,23 +178,17 @@ export function AppointmentSlideOver({
 
     return () => {
       cancelled = true;
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
   }, [open, appointmentId, tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Consolidated watches
-  const watchedStart = form.watch("startAt");
-  const watchedEnd = form.watch("endAt");
-  const watchedStatus = form.watch("status");
+  const watchedStart      = form.watch("startAt");
+  const watchedEnd        = form.watch("endAt");
+  const watchedStatus     = form.watch("status");
   const watchedCustomerId = form.watch("customerId");
 
   const timeInvalid =
-    watchedStart && watchedEnd
-      ? new Date(watchedEnd) <= new Date(watchedStart)
-      : false;
+    watchedStart && watchedEnd ? new Date(watchedEnd) <= new Date(watchedStart) : false;
 
   const canCancel =
     !isCreateMode &&
@@ -187,7 +199,6 @@ export function AppointmentSlideOver({
   async function onSubmit(data: AppointmentFormData) {
     setErrorBanner(null);
     setSaving(true);
-
     try {
       let result;
       if (isCreateMode) {
@@ -213,12 +224,7 @@ export function AppointmentSlideOver({
           status: data.status,
         });
       }
-
-      if (!result.success) {
-        setErrorBanner(result.error ?? "Something went wrong");
-        return;
-      }
-
+      if (!result.success) { setErrorBanner(result.error ?? "Something went wrong"); return; }
       toast.success(isCreateMode ? "Appointment created" : "Appointment saved");
       onClose();
     } catch {
@@ -238,10 +244,7 @@ export function AppointmentSlideOver({
         notes: vals.notes ?? "",
         status: AppointmentStatus.CANCELLED,
       });
-      if (!result.success) {
-        setErrorBanner(result.error ?? "Failed to cancel");
-        return;
-      }
+      if (!result.success) { setErrorBanner(result.error ?? "Failed to cancel"); return; }
       toast.success("Appointment cancelled");
       onClose();
     } catch {
@@ -259,62 +262,86 @@ export function AppointmentSlideOver({
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-[480px] overflow-y-auto flex flex-col gap-0 p-0"
+        className="w-full sm:max-w-[460px] overflow-y-auto flex flex-col gap-0 p-0"
+        style={{
+          background: "var(--surface-raised)",
+          borderLeft: "1px solid var(--border)",
+        }}
       >
-        <SheetHeader className="border-b border-[var(--border)] px-5 py-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-base font-semibold text-[var(--text-primary)]">
-              {isCreateMode
-                ? "New appointment"
-                : (detail?.customer?.name ?? "Appointment")}
+        {/* Header */}
+        <SheetHeader
+          className="flex flex-row items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <div className="flex items-center gap-3">
+            <SheetTitle className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+              {isCreateMode ? "New appointment" : (detail?.customer?.name ?? "Appointment")}
             </SheetTitle>
             {!isCreateMode && detail && (
               <AppointmentStatusBadge status={detail.status} />
             )}
           </div>
+          <button
+            onClick={onClose}
+            className="rounded-[var(--radius-sm)] p-1 transition-colors"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--surface)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
+          >
+            <X className="size-4" />
+          </button>
         </SheetHeader>
 
+        {/* Error banner */}
         {errorBanner && (
           <div
-            role="alert"
-            className="mx-5 mt-4 rounded-[5px] bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]"
+            className="mx-5 mt-4 rounded-[var(--radius-md)] px-3 py-2.5 text-sm"
+            style={{
+              background: "var(--danger-subtle)",
+              border: "1px solid var(--danger-subtle-border)",
+              color: "var(--danger)",
+            }}
           >
             {errorBanner}
           </div>
         )}
 
+        {/* Loading */}
         {loadingDetail && (
-          <div className="flex flex-1 items-center justify-center py-16">
-            <Loader2 className="size-6 animate-spin text-[var(--text-muted)]" />
+          <div className="flex flex-1 items-center justify-center py-20">
+            <Loader2 className="size-5 animate-spin" style={{ color: "var(--text-muted)" }} />
           </div>
         )}
 
+        {/* Form */}
         {!loadingDetail && (
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="flex flex-1 flex-col"
-          >
-            <div className="flex-1 space-y-4 px-5 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col">
+            <div className="flex-1 space-y-5 px-5 py-5">
+
               {/* Customer — create mode only */}
               {isCreateMode && (
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="customer-search"
-                    className="text-xs font-medium text-[var(--text-muted)]"
-                  >
-                    Customer *
-                  </label>
+                <Field
+                  label="Customer"
+                  required
+                  error={form.formState.errors.customerId?.message}
+                >
                   <Input
-                    id="customer-search"
                     placeholder="Search customers…"
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
                     className="text-sm"
                   />
                   {customerSearch && (
-                    <div className="max-h-40 overflow-y-auto rounded-[5px] border border-[var(--border)] bg-[var(--surface)]">
+                    <div
+                      className="mt-1 max-h-44 overflow-y-auto rounded-[var(--radius-md)]"
+                      style={{
+                        background: "var(--surface-raised)",
+                        border: "1px solid var(--border)",
+                        boxShadow: "var(--shadow-md)",
+                      }}
+                    >
                       {filteredCustomers.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-[var(--text-muted)]">
+                        <p className="px-3 py-2.5 text-xs" style={{ color: "var(--text-muted)" }}>
                           No customers found
                         </p>
                       ) : (
@@ -322,21 +349,28 @@ export function AppointmentSlideOver({
                           <button
                             key={c.id}
                             type="button"
-                            className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg)] ${
+                            className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                            style={
                               watchedCustomerId === c.id
-                                ? "bg-[var(--accent)]/10 text-[var(--accent)]"
-                                : "text-[var(--text-primary)]"
-                            }`}
+                                ? { background: "var(--accent-subtle)", color: "var(--accent)" }
+                                : { color: "var(--text-primary)" }
+                            }
+                            onMouseEnter={(e) => {
+                              if (watchedCustomerId !== c.id)
+                                (e.currentTarget as HTMLElement).style.background = "var(--surface)";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (watchedCustomerId !== c.id)
+                                (e.currentTarget as HTMLElement).style.background = "";
+                            }}
                             onClick={() => {
-                              form.setValue("customerId", c.id, {
-                                shouldValidate: true,
-                              });
+                              form.setValue("customerId", c.id, { shouldValidate: true });
                               setCustomerSearch(c.name);
                             }}
                           >
                             <span className="font-medium">{c.name}</span>
                             {c.phone && (
-                              <span className="ml-2 text-xs text-[var(--text-muted)]">
+                              <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>
                                 {c.phone}
                               </span>
                             )}
@@ -345,31 +379,18 @@ export function AppointmentSlideOver({
                       )}
                     </div>
                   )}
-                  {form.formState.errors.customerId && (
-                    <p className="text-xs text-[var(--danger)]">
-                      {form.formState.errors.customerId.message}
-                    </p>
-                  )}
-                </div>
+                </Field>
               )}
 
               {/* Service */}
-              <div className="space-y-1.5">
-                <label
-                  id="service-label"
-                  className="text-xs font-medium text-[var(--text-muted)]"
-                >
-                  Service *
-                </label>
+              <Field label="Service" required error={form.formState.errors.serviceId?.message}>
                 <Select
                   value={form.watch("serviceId") || "__none__"}
                   onValueChange={(v) =>
-                    form.setValue("serviceId", v === "__none__" ? "" : (v ?? ""), {
-                      shouldValidate: true,
-                    })
+                    form.setValue("serviceId", v === "__none__" ? "" : (v ?? ""), { shouldValidate: true })
                   }
                 >
-                  <SelectTrigger aria-labelledby="service-label" className="text-sm">
+                  <SelectTrigger className="text-sm">
                     <SelectValue placeholder="Select a service" />
                   </SelectTrigger>
                   <SelectContent>
@@ -381,143 +402,89 @@ export function AppointmentSlideOver({
                     ))}
                   </SelectContent>
                 </Select>
-                {form.formState.errors.serviceId && (
-                  <p className="text-xs text-[var(--danger)]">
-                    {form.formState.errors.serviceId.message}
-                  </p>
-                )}
-              </div>
+              </Field>
 
               {/* Staff */}
-              <div className="space-y-1.5">
-                <label
-                  id="staff-label"
-                  className="text-xs font-medium text-[var(--text-muted)]"
-                >
-                  Staff member
-                </label>
+              <Field label="Staff member">
                 <Select
                   value={form.watch("teamMemberId") || "__unassigned__"}
                   onValueChange={(v) =>
-                    form.setValue(
-                      "teamMemberId",
-                      v === "__unassigned__" ? "" : (v ?? "")
-                    )
+                    form.setValue("teamMemberId", v === "__unassigned__" ? "" : (v ?? ""))
                   }
                 >
-                  <SelectTrigger aria-labelledby="staff-label" className="text-sm">
+                  <SelectTrigger className="text-sm">
                     <SelectValue placeholder="Unassigned" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__unassigned__">Unassigned</SelectItem>
                     {staff.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
 
-              {/* Start time */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="start-at"
-                  className="text-xs font-medium text-[var(--text-muted)]"
+              {/* Start / End time */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Start time" required error={form.formState.errors.startAt?.message}>
+                  <Input id="start-at" type="datetime-local" className="text-sm" {...form.register("startAt")} />
+                </Field>
+                <Field
+                  label="End time"
+                  required
+                  error={
+                    form.formState.errors.endAt?.message ??
+                    (timeInvalid ? "Must be after start" : undefined)
+                  }
                 >
-                  Start time *
-                </label>
-                <Input
-                  id="start-at"
-                  type="datetime-local"
-                  className="text-sm"
-                  {...form.register("startAt")}
-                />
-                {form.formState.errors.startAt && (
-                  <p className="text-xs text-[var(--danger)]">
-                    {form.formState.errors.startAt.message}
-                  </p>
-                )}
-              </div>
-
-              {/* End time */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="end-at"
-                  className="text-xs font-medium text-[var(--text-muted)]"
-                >
-                  End time *
-                </label>
-                <Input
-                  id="end-at"
-                  type="datetime-local"
-                  className="text-sm"
-                  {...form.register("endAt")}
-                />
-                {form.formState.errors.endAt && (
-                  <p className="text-xs text-[var(--danger)]">
-                    {form.formState.errors.endAt.message}
-                  </p>
-                )}
+                  <Input id="end-at" type="datetime-local" className="text-sm" {...form.register("endAt")} />
+                </Field>
               </div>
 
               {/* Status — edit mode only */}
               {!isCreateMode && (
-                <div className="space-y-1.5">
-                  <label
-                    id="status-label"
-                    className="text-xs font-medium text-[var(--text-muted)]"
-                  >
-                    Status
-                  </label>
+                <Field label="Status">
                   <Select
                     value={watchedStatus}
-                    onValueChange={(v) =>
-                      form.setValue("status", v as AppointmentStatus)
-                    }
+                    onValueChange={(v) => form.setValue("status", v as AppointmentStatus)}
                   >
-                    <SelectTrigger aria-labelledby="status-label" className="text-sm">
+                    <SelectTrigger className="text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {Object.values(AppointmentStatus).map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {formatStatusLabel(s)}
-                        </SelectItem>
+                        <SelectItem key={s} value={s}>{formatStatusLabel(s)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </Field>
               )}
 
               {/* Notes */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="notes"
-                  className="text-xs font-medium text-[var(--text-muted)]"
-                >
-                  Notes
-                </label>
+              <Field label="Notes">
                 <Textarea
-                  id="notes"
                   className="text-sm resize-none"
                   rows={3}
                   placeholder="Internal notes…"
                   {...form.register("notes")}
                 />
-              </div>
+              </Field>
             </div>
 
-            <SheetFooter className="border-t border-[var(--border)] px-5 py-4">
+            {/* Footer */}
+            <SheetFooter
+              className="flex flex-col gap-2 px-5 py-4"
+              style={{ borderTop: "1px solid var(--border)" }}
+            >
               <Button type="submit" disabled={saving || !!timeInvalid} className="w-full">
-                {saving && <Loader2 className="mr-2 size-3.5 animate-spin" />}
+                {saving && <Loader2 className="size-3.5 animate-spin" />}
                 {isCreateMode ? "Create appointment" : "Save changes"}
               </Button>
               {canCancel && (
                 <Button
                   type="button"
                   variant="destructive"
-                  className="w-full mt-2"
+                  className="w-full"
                   disabled={saving}
                   onClick={handleCancel}
                 >

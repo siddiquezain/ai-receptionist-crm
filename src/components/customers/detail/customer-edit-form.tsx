@@ -13,9 +13,9 @@ import { updateCustomer } from "@/lib/actions/customers";
 import type { CustomerDetail } from "@/lib/customers-queries";
 
 const schema = z.object({
-  email: z.string().email("Invalid email").or(z.literal("")).optional(),
-  phone: z.string().optional(),
-  notes: z.string().optional(),
+  email:  z.string().email("Invalid email").or(z.literal("")).optional(),
+  phone:  z.string().optional(),
+  notes:  z.string().optional(),
   source: z.string().optional(),
 });
 
@@ -27,20 +27,36 @@ interface CustomerEditFormProps {
   tenantSlug: string;
 }
 
-export function CustomerEditForm({
-  customer,
-  tenantId,
-  tenantSlug,
-}: CustomerEditFormProps) {
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+        {label}
+      </label>
+      {children}
+      {error && <p className="text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
+    </div>
+  );
+}
+
+export function CustomerEditForm({ customer, tenantId, tenantSlug }: CustomerEditFormProps) {
   const [saving, setSaving] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      email: customer.email ?? "",
-      phone: customer.phone ?? "",
-      notes: customer.notes ?? "",
+      email:  customer.email  ?? "",
+      phone:  customer.phone  ?? "",
+      notes:  customer.notes  ?? "",
       source: customer.source ?? "",
     },
   });
@@ -50,15 +66,12 @@ export function CustomerEditForm({
     setSaving(true);
     try {
       const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
-        email: data.email || null,
-        phone: data.phone || null,
-        notes: data.notes || null,
+        email:  data.email  || null,
+        phone:  data.phone  || null,
+        notes:  data.notes  || null,
         source: data.source || null,
       });
-      if (!result.success) {
-        setErrorBanner(result.error ?? "Failed to save changes");
-        return;
-      }
+      if (!result.success) { setErrorBanner(result.error ?? "Failed to save changes"); return; }
       toast.success("Changes saved");
     } catch {
       setErrorBanner("Something went wrong. Please try again.");
@@ -72,79 +85,45 @@ export function CustomerEditForm({
       {errorBanner && (
         <div
           role="alert"
-          className="rounded-[5px] bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]"
+          className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm"
+          style={{
+            background: "var(--danger-subtle)",
+            border: "1px solid var(--danger-subtle-border)",
+            color: "var(--danger)",
+          }}
         >
           {errorBanner}
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="edit-email"
-          className="text-xs font-medium text-[var(--text-muted)]"
-        >
-          Email
-        </label>
-        <Input
-          id="edit-email"
-          type="email"
-          className="text-sm"
-          {...form.register("email")}
-        />
-        {form.formState.errors.email && (
-          <p className="text-xs text-[var(--danger)]">
-            {form.formState.errors.email.message}
-          </p>
-        )}
-      </div>
+      <Field label="Email" error={form.formState.errors.email?.message}>
+        <Input id="edit-email" type="email" className="text-sm" {...form.register("email")} />
+      </Field>
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="edit-phone"
-          className="text-xs font-medium text-[var(--text-muted)]"
-        >
-          Phone
-        </label>
-        <Input
-          id="edit-phone"
-          type="tel"
-          className="text-sm"
-          {...form.register("phone")}
-        />
-      </div>
+      <Field label="Phone">
+        <Input id="edit-phone" type="tel" className="text-sm" {...form.register("phone")} />
+      </Field>
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="edit-source"
-          className="text-xs font-medium text-[var(--text-muted)]"
-        >
-          Source
-        </label>
+      <Field label="Source">
         <Input
           id="edit-source"
           className="text-sm"
           placeholder="e.g. referral, google, walk-in"
           {...form.register("source")}
         />
-      </div>
+      </Field>
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="edit-notes"
-          className="text-xs font-medium text-[var(--text-muted)]"
-        >
-          Notes
-        </label>
+      <Field label="Notes">
         <Textarea
           id="edit-notes"
           className="resize-none text-sm"
           rows={4}
           {...form.register("notes")}
         />
-      </div>
+      </Field>
 
       <Button type="submit" size="sm" disabled={saving} className="w-full">
-        {saving && <Loader2 className="mr-2 size-3.5 animate-spin" />}
+        {saving && <Loader2 className="size-3.5 animate-spin" />}
         Save changes
       </Button>
     </form>

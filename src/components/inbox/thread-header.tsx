@@ -90,19 +90,22 @@ export function ThreadHeader({
   }
 
   return (
-    <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
+    <div
+      className="flex items-center gap-3 px-4 py-3"
+      style={{ borderBottom: "1px solid var(--border)" }}
+    >
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+        <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
           {customerName ?? "Unknown"}
         </p>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-xs text-[var(--text-muted)]">
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             {CHANNEL_LABEL[conversation.channel]}
           </span>
           {isAssigned && (
             <>
-              <span className="text-[var(--border)]">·</span>
-              <span className="flex items-center gap-1 text-xs text-[var(--success)]">
+              <span style={{ color: "var(--border-strong)" }}>·</span>
+              <span className="flex items-center gap-1 text-xs" style={{ color: "var(--success)" }}>
                 <UserCheck className="size-3" />
                 {isAssignedToCurrentUser ? "You have taken over" : "Assigned to staff"}
               </span>
@@ -110,8 +113,8 @@ export function ThreadHeader({
           )}
           {!isAssigned && (
             <>
-              <span className="text-[var(--border)]">·</span>
-              <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+              <span style={{ color: "var(--border-strong)" }}>·</span>
+              <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
                 <Bot className="size-3" />
                 AI handling
               </span>
@@ -137,7 +140,7 @@ export function ThreadHeader({
           </Button>
         )}
         {conversation.status === "RESOLVED" && (
-          <span className="text-xs font-medium text-[var(--text-muted)]">
+          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
             Resolved
           </span>
         )}

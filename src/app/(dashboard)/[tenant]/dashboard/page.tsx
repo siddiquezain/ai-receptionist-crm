@@ -21,8 +21,6 @@ interface Props {
 export default async function DashboardPage({ params }: Props) {
   const { tenant: slug } = await params;
 
-  // Layout already verified auth + membership.
-  // Just resolve tenantId for data queries.
   const tenant = await prisma.tenant.findFirst({
     where: { slug, deletedAt: null },
     select: { id: true, slug: true, timezone: true },
@@ -39,31 +37,41 @@ export default async function DashboardPage({ params }: Props) {
     ]);
 
   return (
-    <div className="space-y-5 p-6">
-      {/* KPI strip */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard {...stats.appointmentsToday} />
-        <StatCard {...stats.pendingConfirmations} />
-        <StatCard {...stats.openConversations} />
-        <StatCard {...stats.conversionRate} />
+    <div className="min-h-full" style={{ background: "var(--bg)" }}>
+      {/* Page header */}
+      <div
+        className="px-6 py-5"
+        style={{ borderBottom: "1px solid var(--border)" }}
+      >
+        <h1 className="page-title">Dashboard</h1>
       </div>
 
-      {/* Trend chart (2/3) + Inbox snapshot (1/3) */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <TrendChart data={trendData} />
+      <div className="p-6 space-y-5">
+        {/* KPI strip */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard {...stats.appointmentsToday} />
+          <StatCard {...stats.pendingConfirmations} />
+          <StatCard {...stats.openConversations} />
+          <StatCard {...stats.conversionRate} />
         </div>
-        <InboxSnapshot
-          conversations={inboxConversations}
-          tenantSlug={tenant.slug}
+
+        {/* Trend chart (2/3) + Inbox snapshot (1/3) */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2">
+            <TrendChart data={trendData} />
+          </div>
+          <InboxSnapshot
+            conversations={inboxConversations}
+            tenantSlug={tenant.slug}
+          />
+        </div>
+
+        {/* Upcoming appointments — full width */}
+        <UpcomingAppointments
+          appointments={upcomingAppointments}
+          timezone={tenant.timezone}
         />
       </div>
-
-      {/* Upcoming appointments — full width */}
-      <UpcomingAppointments
-        appointments={upcomingAppointments}
-        timezone={tenant.timezone}
-      />
     </div>
   );
 }

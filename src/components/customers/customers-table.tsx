@@ -34,16 +34,16 @@ export function CustomersTable({
 }: CustomersTableProps) {
   const router = useRouter();
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [addingTagId, setAddingTagId] = useState<string | null>(null);
-  const [newTag, setNewTag] = useState("");
+  const [editingId, setEditingId]         = useState<string | null>(null);
+  const [editName, setEditName]           = useState("");
+  const [addingTagId, setAddingTagId]     = useState<string | null>(null);
+  const [newTag, setNewTag]               = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId]       = useState<string | null>(null);
 
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef  = useRef<HTMLInputElement>(null);
   const committingRef = useRef(false);
-  const addingTagRef = useRef(false);
+  const addingTagRef  = useRef(false);
 
   function startEditName(customer: CustomerListItem) {
     setEditingId(customer.id);
@@ -55,30 +55,17 @@ export function CustomersTable({
   async function commitEditName(customer: CustomerListItem) {
     if (committingRef.current) return;
     const trimmed = editName.trim();
-    if (!trimmed || trimmed === customer.name) {
-      setEditingId(null);
-      return;
-    }
+    if (!trimmed || trimmed === customer.name) { setEditingId(null); return; }
     committingRef.current = true;
     setEditingId(null);
     try {
-      const result = await updateCustomer(tenantId, tenantSlug, customer.id, {
-        name: trimmed,
-      });
-      if (!result.success) {
-        toast.error(result.error ?? "Failed to update name");
-      }
-    } catch {
-      toast.error("Failed to update name");
-    } finally {
-      committingRef.current = false;
-    }
+      const result = await updateCustomer(tenantId, tenantSlug, customer.id, { name: trimmed });
+      if (!result.success) toast.error(result.error ?? "Failed to update name");
+    } catch { toast.error("Failed to update name"); }
+    finally { committingRef.current = false; }
   }
 
-  function handleNameKeyDown(
-    e: KeyboardEvent<HTMLInputElement>,
-    customer: CustomerListItem
-  ) {
+  function handleNameKeyDown(e: KeyboardEvent<HTMLInputElement>, customer: CustomerListItem) {
     if (e.key === "Enter") commitEditName(customer);
     if (e.key === "Escape") setEditingId(null);
   }
@@ -89,19 +76,13 @@ export function CustomersTable({
         tags: customer.tags.filter((t) => t !== tag),
       });
       if (!result.success) toast.error(result.error ?? "Failed to remove tag");
-    } catch {
-      toast.error("Failed to remove tag");
-    }
+    } catch { toast.error("Failed to remove tag"); }
   }
 
   async function addTag(customer: CustomerListItem) {
     if (addingTagRef.current) return;
     const tag = newTag.trim();
-    if (!tag || customer.tags.includes(tag)) {
-      setAddingTagId(null);
-      setNewTag("");
-      return;
-    }
+    if (!tag || customer.tags.includes(tag)) { setAddingTagId(null); setNewTag(""); return; }
     addingTagRef.current = true;
     setAddingTagId(null);
     setNewTag("");
@@ -110,22 +91,13 @@ export function CustomersTable({
         tags: [...customer.tags, tag],
       });
       if (!result.success) toast.error(result.error ?? "Failed to add tag");
-    } catch {
-      toast.error("Failed to add tag");
-    } finally {
-      addingTagRef.current = false;
-    }
+    } catch { toast.error("Failed to add tag"); }
+    finally { addingTagRef.current = false; }
   }
 
-  function handleTagKeyDown(
-    e: KeyboardEvent<HTMLInputElement>,
-    customer: CustomerListItem
-  ) {
+  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>, customer: CustomerListItem) {
     if (e.key === "Enter") addTag(customer);
-    if (e.key === "Escape") {
-      setAddingTagId(null);
-      setNewTag("");
-    }
+    if (e.key === "Escape") { setAddingTagId(null); setNewTag(""); }
   }
 
   async function handleDelete(id: string) {
@@ -133,85 +105,94 @@ export function CustomersTable({
     try {
       const result = await deleteCustomer(tenantId, tenantSlug, id);
       if (!result.success) toast.error(result.error ?? "Failed to delete customer");
-    } catch {
-      toast.error("Failed to delete customer");
-    } finally {
-      setDeletingId(null);
-      setConfirmDeleteId(null);
-    }
+    } catch { toast.error("Failed to delete customer"); }
+    finally { setDeletingId(null); setConfirmDeleteId(null); }
   }
 
   if (customers.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] py-16">
-        <Users className="size-10 text-[var(--border)]" />
+      <div
+        className="flex flex-col items-center gap-3 rounded-[var(--radius-lg)] py-20"
+        style={{
+          background: "var(--surface-raised)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div
+          className="flex size-12 items-center justify-center rounded-[var(--radius-lg)]"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        >
+          <Users className="size-5" style={{ color: "var(--text-muted)" }} />
+        </div>
+        <div className="text-center">
+          {searchActive ? (
+            <>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                No customers match your search
+              </p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+                Try a different name or email.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                No customers yet
+              </p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+                Add your first customer to get started.
+              </p>
+            </>
+          )}
+        </div>
         {searchActive ? (
-          <>
-            <p className="text-sm text-[var(--text-muted)]">
-              No customers match your search
-            </p>
-            <Button variant="outline" size="sm" onClick={onClearSearch}>
-              Clear search
-            </Button>
-          </>
+          <Button variant="outline" size="sm" onClick={onClearSearch}>Clear search</Button>
         ) : (
-          <>
-            <p className="text-sm text-[var(--text-muted)]">
-              No customers found
-            </p>
-            <Button variant="outline" size="sm" onClick={onCreateClick}>
-              Add your first customer
-            </Button>
-          </>
+          <Button variant="outline" size="sm" onClick={onCreateClick}>Add customer</Button>
         )}
       </div>
     );
   }
 
+  const navigate = (id: string) => router.push(`/${tenantSlug}/customers/${id}`);
+
   return (
-    <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)]">
+    <div
+      className="rounded-[var(--radius-lg)] overflow-hidden"
+      style={{
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-xs)",
+      }}
+    >
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="data-table">
           <thead>
-            <tr className="border-b border-[var(--border)]">
-              {[
-                { key: "avatar", label: "" },
-                { key: "name", label: "Name" },
-                { key: "email", label: "Email" },
-                { key: "phone", label: "Phone" },
-                { key: "tags", label: "Tags" },
-                { key: "lastSeen", label: "Last seen" },
-                { key: "appts", label: "Appts" },
-                { key: "actions", label: "" },
-              ].map(({ key, label }) => (
-                <th key={key} className="px-3 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]">
-                  {label}
-                </th>
-              ))}
+            <tr>
+              <th style={{ width: 40 }} />
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Tags</th>
+              <th>Last seen</th>
+              <th>Appts</th>
+              <th style={{ width: 48 }} />
             </tr>
           </thead>
           <tbody>
             {customers.map((customer) => (
-              <tr
-                key={customer.id}
-                className="border-b border-[var(--border)] last:border-0 transition-colors hover:bg-[var(--bg)]"
-              >
+              <tr key={customer.id}>
+                {/* Avatar */}
                 <td
-                  className="cursor-pointer px-3 py-2.5"
-                  onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/${tenantSlug}/customers/${customer.id}`);
-                    }
-                  }}
+                  className="cursor-pointer"
+                  onClick={() => navigate(customer.id)}
+                  style={{ paddingLeft: 16, paddingRight: 8 }}
                 >
                   <CustomerAvatar name={customer.name} size="sm" />
                 </td>
 
-                <td className="px-3 py-2.5">
+                {/* Name */}
+                <td onClick={(e) => e.stopPropagation()}>
                   {editingId === customer.id ? (
                     <Input
                       ref={nameInputRef}
@@ -220,11 +201,17 @@ export function CustomersTable({
                       onBlur={() => commitEditName(customer)}
                       onKeyDown={(e) => handleNameKeyDown(e, customer)}
                       className="h-7 w-36 text-sm"
-                      onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
                     <button
-                      className="text-left text-sm font-medium text-[var(--text-primary)] hover:underline"
+                      className="text-left text-sm font-medium transition-colors"
+                      style={{ color: "var(--text-primary)" }}
+                      onMouseEnter={(e) =>
+                        ((e.currentTarget as HTMLElement).style.color = "var(--accent)")
+                      }
+                      onMouseLeave={(e) =>
+                        ((e.currentTarget as HTMLElement).style.color = "var(--text-primary)")
+                      }
                       onClick={() => startEditName(customer)}
                     >
                       {customer.name}
@@ -232,50 +219,41 @@ export function CustomersTable({
                   )}
                 </td>
 
+                {/* Email */}
                 <td
-                  className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
-                  onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/${tenantSlug}/customers/${customer.id}`);
-                    }
-                  }}
+                  className="cursor-pointer"
+                  style={{ color: "var(--text-secondary)" }}
+                  onClick={() => navigate(customer.id)}
                 >
                   {customer.email ?? "—"}
                 </td>
 
+                {/* Phone */}
                 <td
-                  className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
-                  onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/${tenantSlug}/customers/${customer.id}`);
-                    }
-                  }}
+                  className="cursor-pointer"
+                  style={{ color: "var(--text-secondary)" }}
+                  onClick={() => navigate(customer.id)}
                 >
                   {customer.phone ?? "—"}
                 </td>
 
-                <td
-                  className="px-3 py-2.5"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                {/* Tags */}
+                <td onClick={(e) => e.stopPropagation()}>
                   <div className="flex flex-wrap items-center gap-1">
                     {customer.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-0.5 rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-medium text-[var(--accent)]"
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                        style={{
+                          background: "var(--accent-subtle)",
+                          color: "var(--accent)",
+                          border: "1px solid var(--accent-subtle-border)",
+                        }}
                       >
                         {tag}
                         <button
                           onClick={() => removeTag(customer, tag)}
-                          className="ml-0.5 text-[var(--accent)]/60 hover:text-[var(--accent)]"
+                          className="transition-opacity opacity-60 hover:opacity-100"
                           aria-label={`Remove tag ${tag}`}
                         >
                           <X className="size-2.5" />
@@ -289,16 +267,25 @@ export function CustomersTable({
                         onChange={(e) => setNewTag(e.target.value)}
                         onBlur={() => addTag(customer)}
                         onKeyDown={(e) => handleTagKeyDown(e, customer)}
-                        placeholder="tag name"
-                        className="h-5 w-20 px-1.5 text-xs"
+                        placeholder="tag…"
+                        className="h-5 w-16 px-1.5 text-xs"
                       />
                     ) : (
                       <button
-                        onClick={() => {
-                          setAddingTagId(customer.id);
-                          setNewTag("");
+                        onClick={() => { setAddingTagId(customer.id); setNewTag(""); }}
+                        className="flex size-[18px] items-center justify-center rounded-full transition-colors"
+                        style={{
+                          border: "1px dashed var(--border-strong)",
+                          color: "var(--text-muted)",
                         }}
-                        className="flex size-4 items-center justify-center rounded-full border border-dashed border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                          (e.currentTarget as HTMLElement).style.color = "var(--accent)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.borderColor = "var(--border-strong)";
+                          (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+                        }}
                         aria-label="Add tag"
                       >
                         <Plus className="size-2.5" />
@@ -307,43 +294,29 @@ export function CustomersTable({
                   </div>
                 </td>
 
+                {/* Last seen */}
                 <td
-                  className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
-                  onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/${tenantSlug}/customers/${customer.id}`);
-                    }
-                  }}
+                  className="cursor-pointer"
+                  style={{ color: "var(--text-muted)" }}
+                  onClick={() => navigate(customer.id)}
                 >
                   {customer.lastSeenAt ? timeAgo(customer.lastSeenAt) : "—"}
                 </td>
 
+                {/* Appts count */}
                 <td
-                  className="cursor-pointer px-3 py-2.5 text-sm text-[var(--text-muted)]"
-                  onClick={() => router.push(`/${tenantSlug}/customers/${customer.id}`)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/${tenantSlug}/customers/${customer.id}`);
-                    }
-                  }}
+                  className="cursor-pointer font-mono tabular-nums"
+                  style={{ color: "var(--text-secondary)" }}
+                  onClick={() => navigate(customer.id)}
                 >
                   {customer._count.appointments}
                 </td>
 
-                <td
-                  className="px-3 py-2.5"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                {/* Actions */}
+                <td onClick={(e) => e.stopPropagation()}>
                   {confirmDeleteId === customer.id ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-[var(--text-muted)]">Delete?</span>
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>Delete?</span>
                       <Button
                         size="xs"
                         variant="destructive"
@@ -352,11 +325,7 @@ export function CustomersTable({
                       >
                         Yes
                       </Button>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => setConfirmDeleteId(null)}
-                      >
+                      <Button size="xs" variant="ghost" onClick={() => setConfirmDeleteId(null)}>
                         No
                       </Button>
                     </div>
@@ -367,7 +336,7 @@ export function CustomersTable({
                       onClick={() => setConfirmDeleteId(customer.id)}
                       aria-label="Delete customer"
                     >
-                      <Trash2 className="size-3.5 text-[var(--text-muted)]" />
+                      <Trash2 className="size-3.5" style={{ color: "var(--text-muted)" }} />
                     </Button>
                   )}
                 </td>
@@ -378,10 +347,11 @@ export function CustomersTable({
       </div>
 
       {hasMore && (
-        <div className="border-t border-[var(--border)] px-4 py-3 text-center">
-          <Button variant="ghost" size="sm" onClick={onLoadMore}>
-            Load more
-          </Button>
+        <div
+          className="px-5 py-3 text-center"
+          style={{ borderTop: "1px solid var(--border)" }}
+        >
+          <Button variant="ghost" size="sm" onClick={onLoadMore}>Load more</Button>
         </div>
       )}
     </div>

@@ -75,7 +75,7 @@ export default async function DashboardLayout({
   }));
 
   return (
-    <div className="flex h-screen bg-[var(--bg)]">
+    <div className="flex h-screen" style={{ background: "var(--bg)" }}>
       <Sidebar
         tenant={{
           name: tenant.name,
@@ -89,7 +89,7 @@ export default async function DashboardLayout({
         }}
         workspaces={workspaces}
       />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto min-w-0" style={{ background: "var(--bg)" }}>
         {children}
       </main>
     </div>

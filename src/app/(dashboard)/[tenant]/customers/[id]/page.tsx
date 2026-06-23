@@ -38,51 +38,66 @@ export default async function CustomerDetailPage({ params }: Props) {
   if (!customer) redirect(`/${slug}/customers`);
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Back link */}
-      <Link
-        href={`/${slug}/customers`}
-        className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+    <div className="min-h-full" style={{ background: "var(--bg)" }}>
+      {/* Page header */}
+      <div
+        className="flex items-center gap-3 px-6 py-5"
+        style={{ borderBottom: "1px solid var(--border)" }}
       >
-        <ChevronLeft className="size-3.5" />
-        Customers
-      </Link>
+        <Link
+          href={`/${slug}/customers`}
+          className="inline-flex items-center gap-1 text-sm transition-colors"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <ChevronLeft className="size-3.5" />
+          Customers
+        </Link>
+        <span style={{ color: "var(--border-strong)" }}>/</span>
+        <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          {customer.name}
+        </span>
+      </div>
 
-      {/* Two-column layout */}
-      <div className="flex items-start gap-6">
-        {/* Left column — 1/3 */}
-        <div className="w-1/3 shrink-0 space-y-6">
-          <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="p-6">
+        <div className="flex items-start gap-6">
+          {/* Left column — 1/3 */}
+          <div className="w-72 shrink-0 space-y-4">
             <CustomerHeader
               customer={customer}
               tenantId={tenant.id}
               tenantSlug={tenant.slug}
             />
-          </div>
-          <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)] p-4">
-            <p className="mb-4 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Contact details
-            </p>
-            <CustomerEditForm
-              customer={customer}
-              tenantId={tenant.id}
-              tenantSlug={tenant.slug}
-            />
-          </div>
-        </div>
 
-        {/* Right column — 2/3 */}
-        <div className="min-w-0 flex-1 space-y-6">
-          <CustomerActivity
-            appointments={appointments}
-            conversations={conversations}
-          />
-          <CustomerAppointments
-            appointments={appointments}
-            tenantSlug={tenant.slug}
-            timezone={tenant.timezone}
-          />
-          <CustomerConversations conversations={conversations} />
+            <div
+              className="rounded-[var(--radius-lg)] p-5"
+              style={{
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border)",
+                boxShadow: "var(--shadow-xs)",
+              }}
+            >
+              <p className="section-label mb-4">Contact details</p>
+              <CustomerEditForm
+                customer={customer}
+                tenantId={tenant.id}
+                tenantSlug={tenant.slug}
+              />
+            </div>
+          </div>
+
+          {/* Right column — flex-1 */}
+          <div className="min-w-0 flex-1 space-y-4">
+            <CustomerActivity
+              appointments={appointments}
+              conversations={conversations}
+            />
+            <CustomerAppointments
+              appointments={appointments}
+              tenantSlug={tenant.slug}
+              timezone={tenant.timezone}
+            />
+            <CustomerConversations conversations={conversations} />
+          </div>
         </div>
       </div>
     </div>

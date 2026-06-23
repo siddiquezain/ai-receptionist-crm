@@ -21,49 +21,41 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-  });
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
   async function onSubmit(values: LoginFormValues) {
     setLoading(true);
     const supabase = createClient();
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
     });
-
-    if (error) {
-      setLoading(false);
-      toast.error(error.message);
-      return;
-    }
-
+    if (error) { setLoading(false); toast.error(error.message); return; }
     const slug = await getFirstTenantSlug(data.user.id);
-
-    if (slug) {
-      router.push(`/${slug}/dashboard`);
-    } else {
-      // User authenticated but has no tenant — send to register to complete setup
-      router.push("/register");
-    }
+    if (slug) { router.push(`/${slug}/dashboard`); } else { router.push("/register"); }
   }
 
   return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[6px] p-8">
+    <div
+      className="rounded-[var(--radius-xl)] p-7"
+      style={{
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+        <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
           Sign in
         </h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           Welcome back. Enter your credentials to continue.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm text-[var(--text-primary)]">
+          <Label htmlFor="email" className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
             Email
           </Label>
           <Input
@@ -76,23 +68,19 @@ export default function LoginPage() {
             className={errors.email ? "border-[var(--danger)]" : ""}
           />
           {errors.email && (
-            <p className="text-xs text-[var(--danger)]">
-              {errors.email.message}
-            </p>
+            <p className="text-xs" style={{ color: "var(--danger)" }}>{errors.email.message}</p>
           )}
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label
-              htmlFor="password"
-              className="text-sm text-[var(--text-primary)]"
-            >
+            <Label htmlFor="password" className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
               Password
             </Label>
             <Link
               href="/forgot-password"
-              className="text-xs text-[var(--accent)] hover:underline"
+              className="text-xs transition-colors"
+              style={{ color: "var(--accent)" }}
             >
               Forgot password?
             </Link>
@@ -107,24 +95,18 @@ export default function LoginPage() {
             className={errors.password ? "border-[var(--danger)]" : ""}
           />
           {errors.password && (
-            <p className="text-xs text-[var(--danger)]">
-              {errors.password.message}
-            </p>
+            <p className="text-xs" style={{ color: "var(--danger)" }}>{errors.password.message}</p>
           )}
         </div>
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={loading}
-        >
+        <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
+      <p className="mt-5 text-center text-sm" style={{ color: "var(--text-muted)" }}>
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="text-[var(--accent)] hover:underline">
+        <Link href="/register" className="font-medium transition-colors" style={{ color: "var(--accent)" }}>
           Create one
         </Link>
       </p>

@@ -34,11 +34,7 @@ export function CustomersClient({
   function pushSearch(value: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("page");
-    if (value) {
-      params.set("search", value);
-    } else {
-      params.delete("search");
-    }
+    if (value) { params.set("search", value); } else { params.delete("search"); }
     router.replace(`${pathname}?${params.toString()}`);
   }
 
@@ -50,47 +46,48 @@ export function CustomersClient({
   }, [router, pathname, searchParams]);
 
   return (
-    <>
+    <div className="min-h-full" style={{ background: "var(--bg)" }}>
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-          Customers
-        </h1>
+      <div
+        className="flex items-center justify-between px-6 py-5"
+        style={{ borderBottom: "1px solid var(--border)" }}
+      >
+        <h1 className="page-title">Customers</h1>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="size-3.5" />
           New customer
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
-        <Input
-          placeholder="Search customers…"
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") pushSearch(searchValue);
-          }}
-          onBlur={() => pushSearch(searchValue)}
-          className="pl-8 text-sm"
+      <div className="p-6 space-y-4">
+        {/* Search */}
+        <div className="relative w-64">
+          <Search
+            className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 pointer-events-none"
+            style={{ color: "var(--text-muted)" }}
+          />
+          <Input
+            placeholder="Search customers…"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") pushSearch(searchValue); }}
+            onBlur={() => pushSearch(searchValue)}
+            className="pl-8 text-sm"
+          />
+        </div>
+
+        {/* Table */}
+        <CustomersTable
+          customers={customers}
+          hasMore={hasMore}
+          tenantId={tenantId}
+          tenantSlug={tenantSlug}
+          onLoadMore={handleLoadMore}
+          onCreateClick={() => setCreateOpen(true)}
+          searchActive={!!search}
+          onClearSearch={() => { setSearchValue(""); pushSearch(""); }}
         />
       </div>
-
-      {/* Table */}
-      <CustomersTable
-        customers={customers}
-        hasMore={hasMore}
-        tenantId={tenantId}
-        tenantSlug={tenantSlug}
-        onLoadMore={handleLoadMore}
-        onCreateClick={() => setCreateOpen(true)}
-        searchActive={!!search}
-        onClearSearch={() => {
-          setSearchValue("");
-          pushSearch("");
-        }}
-      />
 
       {/* Create slide-over */}
       <CustomerCreateSlideOver
@@ -99,6 +96,6 @@ export function CustomersClient({
         tenantId={tenantId}
         tenantSlug={tenantSlug}
       />
-    </>
+    </div>
   );
 }

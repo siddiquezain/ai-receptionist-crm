@@ -20,16 +20,23 @@ export function NavItem({ href, label, icon: Icon }: NavItemProps) {
       href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex items-center gap-2.5 rounded-[5px] px-2.5 py-1.5 text-sm transition-colors",
+        "group flex items-center gap-2.5 rounded-[var(--radius-md)] px-2.5 py-[7px] text-sm font-medium transition-colors",
         isActive
-          ? "bg-[var(--accent)]/10 text-[var(--accent)] font-medium"
-          : "text-[var(--text-muted)] hover:bg-[var(--bg)] hover:text-[var(--text-primary)]"
+          ? "text-[var(--accent)]"
+          : "text-[var(--text-secondary)] hover:bg-[var(--border)]/40 hover:text-[var(--text-primary)]"
       )}
+      style={
+        isActive
+          ? { background: "var(--accent-subtle)" }
+          : undefined
+      }
     >
       <Icon
         className={cn(
-          "size-4 shrink-0",
-          isActive ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
+          "size-[15px] shrink-0 transition-colors",
+          isActive
+            ? "text-[var(--accent)]"
+            : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"
         )}
       />
       {label}

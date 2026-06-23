@@ -213,13 +213,20 @@ export function InboxClient({
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full overflow-hidden" style={{ background: "var(--bg)" }}>
       {/* Left: Conversation list */}
-      <div className="w-[280px] shrink-0 flex flex-col border-r border-[var(--border)] overflow-hidden">
-        <div className="border-b border-[var(--border)] px-4 py-3">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-            Inbox
-          </p>
+      <div
+        className="w-[268px] shrink-0 flex flex-col overflow-hidden"
+        style={{
+          background: "var(--sidebar-bg)",
+          borderRight: "1px solid var(--sidebar-border)",
+        }}
+      >
+        <div
+          className="px-4 py-[13px]"
+          style={{ borderBottom: "1px solid var(--sidebar-border)" }}
+        >
+          <p className="section-label">Inbox</p>
         </div>
         <div className="flex-1 overflow-y-auto">
           <ConversationList
@@ -231,7 +238,10 @@ export function InboxClient({
       </div>
 
       {/* Middle: Thread */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div
+        className="flex flex-1 flex-col overflow-hidden"
+        style={{ background: "var(--surface-raised)", borderRight: "1px solid var(--border)" }}
+      >
         {selectedConversation ? (
           <>
             {/* Escalation banner */}
@@ -259,7 +269,7 @@ export function InboxClient({
 
             {/* Messages — dimmed while navigating */}
             <div
-              className={`flex-1 overflow-hidden flex flex-col ${isPending ? "opacity-50" : ""}`}
+              className={`flex-1 overflow-hidden flex flex-col transition-opacity ${isPending ? "opacity-40" : ""}`}
             >
               <MessageThread messages={messages} />
             </div>
@@ -280,9 +290,14 @@ export function InboxClient({
             />
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2">
-            <MessageSquare className="size-10 text-[var(--border)]" />
-            <p className="text-sm text-[var(--text-muted)]">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3">
+            <div
+              className="flex size-12 items-center justify-center rounded-[var(--radius-lg)]"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <MessageSquare className="size-5" style={{ color: "var(--text-muted)" }} />
+            </div>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               Select a conversation to get started.
             </p>
           </div>
