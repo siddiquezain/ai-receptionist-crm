@@ -236,11 +236,28 @@ export function InboxClient({
           onChange={setFilter}
         />
         <div className="flex-1 overflow-y-auto">
-          <ConversationList
-            conversations={filteredConversations}
-            selectedId={selectedConversationId}
-            onSelect={selectConversation}
-          />
+          {filteredConversations.length === 0 && conversations.length > 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center px-4">
+              <MessageSquare className="h-7 w-7 text-[var(--text-muted)]" />
+              <p className="text-sm text-[var(--text-muted)]">
+                {filter.status !== "ALL"
+                  ? `No ${filter.status.toLowerCase()} conversations`
+                  : "No conversations match the current filters"}
+              </p>
+              <button
+                onClick={() => setFilter(DEFAULT_FILTER_STATE)}
+                className="text-xs text-[var(--accent)] hover:underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <ConversationList
+              conversations={filteredConversations}
+              selectedId={selectedConversationId}
+              onSelect={selectConversation}
+            />
+          )}
         </div>
       </div>
 

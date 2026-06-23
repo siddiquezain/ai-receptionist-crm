@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Calendar } from "lucide-react";
 import { AppointmentStatusBadge } from "@/components/appointments/appointment-status-badge";
 import { formatDate } from "@/lib/utils";
 import type { CustomerAppointmentItem } from "@/lib/customers-queries";
@@ -6,12 +7,14 @@ import type { CustomerAppointmentItem } from "@/lib/customers-queries";
 interface CustomerAppointmentsProps {
   appointments: CustomerAppointmentItem[];
   tenantSlug: string;
+  customerId: string;
   timezone: string;
 }
 
 export function CustomerAppointments({
   appointments,
   tenantSlug,
+  customerId,
   timezone,
 }: CustomerAppointmentsProps) {
   return (
@@ -23,9 +26,21 @@ export function CustomerAppointments({
       </div>
 
       {appointments.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
-          No appointments yet
-        </p>
+        <div className="py-8 flex flex-col items-center gap-3 text-center">
+          <Calendar className="h-7 w-7 text-[var(--text-muted)]" />
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">No appointments yet</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              This customer hasn&apos;t booked any appointments.
+            </p>
+          </div>
+          <Link
+            href={`/${tenantSlug}/appointments?customerId=${customerId}`}
+            className="inline-flex items-center rounded-[4px] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+          >
+            Book appointment
+          </Link>
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">

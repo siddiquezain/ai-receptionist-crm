@@ -59,7 +59,7 @@ export default async function AnalyticsPage({ params, searchParams }: Props) {
           </div>
         }
       >
-        <AnalyticsCharts tenantId={tenant.id} from={from} to={to} />
+        <AnalyticsCharts tenantId={tenant.id} tenantSlug={tenant.slug} from={from} to={to} />
       </Suspense>
 
       <Suspense

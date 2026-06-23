@@ -80,6 +80,7 @@ export default async function CustomerDetailPage({ params }: Props) {
           <CustomerAppointments
             appointments={appointments}
             tenantSlug={tenant.slug}
+            customerId={id}
             timezone={tenant.timezone}
           />
           <CustomerConversations conversations={conversations} />
