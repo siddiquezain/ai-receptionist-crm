@@ -6,7 +6,6 @@ import {
   getAppointments,
   getStaffOptions,
   getServiceOptions,
-  getCustomerOptions,
   APPOINTMENT_SORT_OPTIONS,
 } from "@/lib/appointments-queries";
 import { parseSortParams } from "@/lib/sorting";
@@ -52,12 +51,11 @@ export default async function AppointmentsPage({ params, searchParams }: Props) 
   ) as Record<string, string | undefined>;
   const { sort } = parseSortParams(spStrings, APPOINTMENT_SORT_OPTIONS, "date_desc");
 
-  const [{ appointments, hasMore }, staff, services, customers] =
+  const [{ appointments, hasMore }, staff, services] =
     await Promise.all([
       getAppointments(tenant.id, { status, from, to, staffId, page, q, sort }),
       getStaffOptions(tenant.id),
       getServiceOptions(tenant.id),
-      getCustomerOptions(tenant.id),
     ]);
 
   return (
@@ -67,7 +65,6 @@ export default async function AppointmentsPage({ params, searchParams }: Props) 
         hasMore={hasMore}
         staff={staff}
         services={services}
-        customers={customers}
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
         timezone={tenant.timezone}

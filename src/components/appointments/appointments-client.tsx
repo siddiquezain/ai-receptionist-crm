@@ -11,7 +11,6 @@ import type {
   AppointmentListItem,
   StaffOption,
   ServiceOption,
-  CustomerOption,
   AppointmentSortValue,
 } from "@/lib/appointments-queries";
 import type { SortOption } from "@/lib/sorting";
@@ -21,7 +20,6 @@ interface AppointmentsClientProps {
   hasMore: boolean;
   staff: StaffOption[];
   services: ServiceOption[];
-  customers: CustomerOption[];
   tenantId: string;
   tenantSlug: string;
   timezone: string;
@@ -34,7 +32,6 @@ export function AppointmentsClient({
   hasMore,
   staff,
   services,
-  customers,
   tenantId,
   tenantSlug,
   timezone,
@@ -107,7 +104,6 @@ export function AppointmentsClient({
         tenantSlug={tenantSlug}
         services={services}
         staff={staff}
-        customers={customers}
       />
     </>
   );

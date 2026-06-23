@@ -31,6 +31,7 @@ import {
   updateAppointment,
   createAppointment,
 } from "@/lib/actions/appointments";
+import { searchCustomersAction } from "@/lib/actions/customers";
 import type {
   AppointmentDetail,
   StaffOption,
@@ -76,7 +77,6 @@ interface AppointmentSlideOverProps {
   tenantSlug: string;
   services: ServiceOption[];
   staff: StaffOption[];
-  customers: CustomerOption[];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -89,7 +89,6 @@ export function AppointmentSlideOver({
   tenantSlug,
   services,
   staff,
-  customers,
 }: AppointmentSlideOverProps) {
   const isCreateMode = appointmentId === null;
 
@@ -97,8 +96,11 @@ export function AppointmentSlideOver({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState<CustomerOption[]>([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
   const [saving, setSaving] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -127,6 +129,7 @@ export function AppointmentSlideOver({
       });
       setErrorBanner(null);
       setCustomerSearch("");
+      setCustomerResults([]);
       return;
     }
 
@@ -251,9 +254,20 @@ export function AppointmentSlideOver({
     }
   }
 
-  const filteredCustomers = customers.filter((c) =>
-    c.name.toLowerCase().includes(customerSearch.toLowerCase())
-  );
+  function handleCustomerSearch(q: string) {
+    setCustomerSearch(q);
+    if (customerDebounceRef.current) clearTimeout(customerDebounceRef.current);
+    if (q.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+    customerDebounceRef.current = setTimeout(async () => {
+      setSearchingCustomers(true);
+      const results = await searchCustomersAction(q, tenantId);
+      setCustomerResults(results);
+      setSearchingCustomers(false);
+    }, 275);
+  }
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -308,17 +322,21 @@ export function AppointmentSlideOver({
                     id="customer-search"
                     placeholder="Search customers…"
                     value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    onChange={(e) => handleCustomerSearch(e.target.value)}
                     className="text-sm"
                   />
-                  {customerSearch && (
+                  {customerSearch && customerSearch.length >= 2 && (
                     <div className="max-h-40 overflow-y-auto rounded-[5px] border border-[var(--border)] bg-[var(--surface)]">
-                      {filteredCustomers.length === 0 ? (
+                      {searchingCustomers ? (
+                        <p className="px-3 py-2 text-xs text-[var(--text-muted)]">
+                          Searching…
+                        </p>
+                      ) : customerResults.length === 0 ? (
                         <p className="px-3 py-2 text-xs text-[var(--text-muted)]">
                           No customers found
                         </p>
                       ) : (
-                        filteredCustomers.map((c) => (
+                        customerResults.map((c) => (
                           <button
                             key={c.id}
                             type="button"
@@ -332,6 +350,7 @@ export function AppointmentSlideOver({
                                 shouldValidate: true,
                               });
                               setCustomerSearch(c.name);
+                              setCustomerResults([]);
                             }}
                           >
                             <span className="font-medium">{c.name}</span>

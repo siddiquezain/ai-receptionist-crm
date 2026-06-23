@@ -2,8 +2,30 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import type { CustomerOption } from "@/lib/appointments-queries";
 
 export type ActionResult = { success: boolean; error?: string };
+
+export async function searchCustomersAction(
+  query: string,
+  tenantId: string
+): Promise<CustomerOption[]> {
+  if (query.length < 2) return [];
+  return prisma.customer.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      OR: [
+        { name: { contains: query, mode: "insensitive" } },
+        { email: { contains: query, mode: "insensitive" } },
+        { phone: { contains: query, mode: "insensitive" } },
+      ],
+    },
+    take: 10,
+    select: { id: true, name: true, email: true, phone: true },
+    orderBy: { name: "asc" },
+  });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
