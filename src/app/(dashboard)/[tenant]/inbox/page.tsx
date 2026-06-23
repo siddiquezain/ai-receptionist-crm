@@ -42,7 +42,7 @@ interface LoaderProps {
 
 async function InboxDataLoader({ tenantSlug, conversationId }: LoaderProps) {
   const tenant = await prisma.tenant.findFirst({
-    where: { slug: tenantSlug },
+    where: { slug: tenantSlug, deletedAt: null },
     select: { id: true, slug: true, timezone: true },
   });
   if (!tenant) redirect("/login");

@@ -1,4 +1,5 @@
 import { StatCardSkeleton, ChartSkeleton, TableSkeleton, ConversationSkeleton } from "@/components/ui/skeletons"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function DashboardLoading() {
   return (
@@ -15,7 +16,7 @@ export default function DashboardLoading() {
         </div>
         <div className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)]">
           <div className="p-4 border-b border-[var(--border)]">
-            <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+            <Skeleton className="h-4 w-32" />
           </div>
           {Array.from({ length: 3 }).map((_, i) => (
             <ConversationSkeleton key={i} />

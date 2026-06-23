@@ -3,6 +3,14 @@ import { Calendar } from "lucide-react";
 import { AppointmentStatusBadge } from "@/components/appointments/appointment-status-badge";
 import { formatDate } from "@/lib/utils";
 import type { CustomerAppointmentItem } from "@/lib/customers-queries";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 interface CustomerAppointmentsProps {
   appointments: CustomerAppointmentItem[];
@@ -14,7 +22,7 @@ interface CustomerAppointmentsProps {
 export function CustomerAppointments({
   appointments,
   tenantSlug,
-  customerId,
+  customerId: _customerId,
   timezone,
 }: CustomerAppointmentsProps) {
   return (
@@ -35,54 +43,54 @@ export function CustomerAppointments({
             </p>
           </div>
           <Link
-            href={`/${tenantSlug}/appointments?customerId=${customerId}`}
-            className="inline-flex items-center rounded-[4px] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+            href={`/${tenantSlug}/appointments`}
+            className="inline-flex items-center rounded-[6px] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
           >
             Book appointment
           </Link>
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b border-[var(--border)]">
                 {["Service", "Staff", "Date", "Status"].map((h) => (
-                  <th
+                  <TableHead
                     key={h}
                     className="px-4 py-2 text-left text-xs font-medium text-[var(--text-muted)]"
                   >
                     {h}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {appointments.map((appt) => (
-                <tr
+                <TableRow
                   key={appt.id}
                   className="border-b border-[var(--border)] last:border-0 transition-colors hover:bg-[var(--bg)]"
                 >
-                  <td className="px-4 py-2.5 text-sm text-[var(--text-primary)]">
+                  <TableCell className="px-4 py-2.5 text-sm text-[var(--text-primary)]">
                     <Link
                       href={`/${tenantSlug}/appointments?highlight=${appt.id}`}
                       className="hover:underline"
                     >
                       {appt.service.name}
                     </Link>
-                  </td>
-                  <td className="px-4 py-2.5 text-sm text-[var(--text-muted)]">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5 text-sm text-[var(--text-muted)]">
                     {appt.teamMember?.name ?? "—"}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--text-muted)]">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5 font-mono text-sm tabular-nums text-[var(--text-muted)]">
                     {formatDate(appt.startAt, timezone, "MMM d, h:mm a")}
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
                     <AppointmentStatusBadge status={appt.status} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

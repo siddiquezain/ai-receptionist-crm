@@ -41,7 +41,7 @@ function HighlightedText({ text, matches }: { text: string; matches?: MatchRange
     parts.push(
       <mark
         key={`m-${start}`}
-        className="bg-[var(--accent)]/20 text-[var(--text-primary)] rounded-sm not-italic"
+        className="bg-[var(--accent)]/20 text-[var(--text-primary)] rounded-[3px] not-italic"
       >
         {text.slice(start, end)}
       </mark>

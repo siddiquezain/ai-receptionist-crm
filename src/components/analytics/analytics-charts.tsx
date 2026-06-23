@@ -46,13 +46,13 @@ export async function AnalyticsCharts({ tenantId, tenantSlug, from, to }: Analyt
         <div className="flex gap-2">
           <a
             href={`${base}?from=${last30From}&to=${toStr}`}
-            className="rounded-[4px] border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+            className="rounded-[6px] border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
           >
             Last 30 days
           </a>
           <a
             href={`${base}?from=${last90From}&to=${toStr}`}
-            className="rounded-[4px] border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+            className="rounded-[6px] border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
           >
             Last 90 days
           </a>
