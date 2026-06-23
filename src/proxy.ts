@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { TENANT_SLUG_HEADER } from "@/lib/tenant";
 
 const PUBLIC_ROUTES = ["/login", "/register", "/forgot-password"];
+const BYPASS_PREFIXES = ["/api/internal/", "/api/webhooks/"];
 const BOOKING_ROUTE_PREFIX = "/book/";
 
 export async function proxy(request: NextRequest) {
@@ -10,7 +11,8 @@ export async function proxy(request: NextRequest) {
 
   if (
     PUBLIC_ROUTES.some((r) => pathname.startsWith(r)) ||
-    pathname.startsWith(BOOKING_ROUTE_PREFIX)
+    pathname.startsWith(BOOKING_ROUTE_PREFIX) ||
+    BYPASS_PREFIXES.some((p) => pathname.startsWith(p))
   ) {
     return NextResponse.next();
   }
