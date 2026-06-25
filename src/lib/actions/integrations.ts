@@ -28,14 +28,20 @@ export async function saveMessagingIntegration(
     const { userId, role } = await requireTenantAccess(tenantId);
     requirePermission(role, "integrations.manage");
 
-    if (!data.instanceName.trim()) {
+    const instanceName  = data.instanceName.trim();
+    const displayName   = data.displayName.trim();
+    const apiEndpoint   = data.apiEndpoint.trim();
+    const phoneNumber   = data.phoneNumber?.trim();
+    const apiKey        = data.apiKey.trim();
+
+    if (!instanceName) {
       return { success: false, error: "Instance name is required" };
     }
-    if (!data.apiKey.trim()) {
+    if (!apiKey) {
       return { success: false, error: "API key is required" };
     }
 
-    const encryptedApiKey = encrypt(data.apiKey);
+    const encryptedApiKey = encrypt(apiKey);
 
     const existing = await prisma.messagingIntegration.findFirst({
       where: { tenantId, provider: data.provider, deletedAt: null },
@@ -48,11 +54,11 @@ export async function saveMessagingIntegration(
       await prisma.messagingIntegration.update({
         where: { id: existing.id },
         data: {
-          instanceName: data.instanceName,
-          displayName: data.displayName || null,
-          apiEndpoint: data.apiEndpoint || null,
+          instanceName,
+          displayName: displayName || null,
+          apiEndpoint: apiEndpoint || null,
           apiKey: encryptedApiKey,
-          phoneNumber: data.phoneNumber || null,
+          phoneNumber: phoneNumber || null,
           isActive: true,
         },
       });
@@ -62,11 +68,11 @@ export async function saveMessagingIntegration(
         data: {
           tenantId,
           provider: data.provider,
-          instanceName: data.instanceName,
-          displayName: data.displayName || null,
-          apiEndpoint: data.apiEndpoint || null,
+          instanceName,
+          displayName: displayName || null,
+          apiEndpoint: apiEndpoint || null,
           apiKey: encryptedApiKey,
-          phoneNumber: data.phoneNumber || null,
+          phoneNumber: phoneNumber || null,
         },
         select: { id: true },
       });
