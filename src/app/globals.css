@@ -283,36 +283,6 @@ body {
   color: var(--text-muted);
 }
 
-/* ─── Utility: status badge ──────────────────────────────────────────────── */
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 99px;
-  border-width: 1px;
-  border-style: solid;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.status-badge-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* Status variants */
-.status-pending  { background: var(--warning-subtle);  border-color: var(--warning-subtle-border);  color: var(--warning);  }
-.status-confirmed{ background: var(--success-subtle);  border-color: var(--success-subtle-border);  color: var(--success);  }
-.status-cancelled{ background: var(--danger-subtle);   border-color: var(--danger-subtle-border);   color: var(--danger);   }
-.status-completed{ background: var(--surface);         border-color: var(--border);                 color: var(--text-muted);}
-.status-no-show  { background: var(--danger-subtle);   border-color: var(--danger-subtle-border);   color: var(--danger);   }
-.status-rescheduled { background: var(--warning-subtle); border-color: var(--warning-subtle-border); color: var(--warning); }
-
 /* ─── Utility: table ─────────────────────────────────────────────────────── */
 
 .data-table {

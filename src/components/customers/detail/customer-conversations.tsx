@@ -8,13 +8,11 @@ const CHANNEL_LABEL: Record<ConversationChannel, string> = {
   WHATSAPP: "WhatsApp",
 };
 
-type StatusStyle = { label: string; bg: string; border: string; color: string };
-
-const STATUS_STYLE: Record<ConversationStatus, StatusStyle> = {
-  OPEN:      { label: "Open",     bg: "var(--success-subtle)", border: "var(--success-subtle-border)", color: "var(--success)" },
-  RESOLVED:  { label: "Resolved", bg: "var(--surface)",        border: "var(--border)",                color: "var(--text-muted)" },
-  ESCALATED: { label: "Escalated",bg: "var(--warning-subtle)", border: "var(--warning-subtle-border)", color: "var(--warning)" },
-  ARCHIVED:  { label: "Archived", bg: "var(--surface)",        border: "var(--border)",                color: "var(--text-muted)" },
+const STATUS_STYLE: Record<ConversationStatus, { label: string; className: string }> = {
+  OPEN:      { label: "Open",      className: "bg-[var(--success-subtle)] border-[var(--success-subtle-border)] text-[var(--success)]" },
+  RESOLVED:  { label: "Resolved",  className: "bg-[var(--surface)] border-[var(--border)] text-[var(--text-muted)]" },
+  ESCALATED: { label: "Escalated", className: "bg-[var(--warning-subtle)] border-[var(--warning-subtle-border)] text-[var(--warning)]" },
+  ARCHIVED:  { label: "Archived",  className: "bg-[var(--surface)] border-[var(--border)] text-[var(--text-disabled)]" },
 };
 
 interface CustomerConversationsProps {
@@ -50,9 +48,9 @@ export function CustomerConversations({ conversations }: CustomerConversationsPr
                   {CHANNEL_LABEL[conv.channel] ?? conv.channel}
                 </span>
                 <span
-                  className="status-badge"
-                  style={{ background: s.bg, borderColor: s.border, color: s.color }}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${s.className}`}
                 >
+                  <span className="size-1.5 shrink-0 rounded-full bg-current" />
                   {s.label}
                 </span>
                 <span className="text-xs" style={{ color: "var(--text-muted)" }}>
