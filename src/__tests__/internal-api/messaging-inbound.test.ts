@@ -134,12 +134,27 @@ describe("POST /api/internal/messaging/inbound", () => {
 
   // ── fromMe guard ────────────────────────────────────────────────────────────
 
-  it("returns 200 { ignored: true } and skips all DB work when fromMe is true", async () => {
+  it("returns 200 { ignored:true, reason:'fromMe' } and skips all DB work when fromMe is true", async () => {
     const res = await POST(makeRequest({ ...validBody, fromMe: true }));
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toEqual({ ignored: true });
+    expect(json).toEqual({ ignored: true, reason: "fromMe" });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does NOT skip pipeline when fromMe is false — reaches DB transaction", async () => {
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn: unknown) => {
+      if (typeof fn === "function") return fn(makeHappyPathTx());
+    });
+    const res = await POST(makeRequest({ ...validBody, fromMe: false }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    // Must NOT be an ignored response
+    expect(json.ignored).toBeUndefined();
+    expect(json.reason).toBeUndefined();
+    // Must have gone through the pipeline
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(json.isDuplicate).toBe(false);
   });
 
   // ── Provider switch ─────────────────────────────────────────────────────────

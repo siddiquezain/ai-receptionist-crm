@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         durationMs: Date.now() - startMs,
         result: "ignored",
       });
-      return NextResponse.json({ ignored: true });
+      return NextResponse.json({ ignored: true, reason: "fromMe" });
     }
 
     // 4. Provider switch — route to provider-specific logic
