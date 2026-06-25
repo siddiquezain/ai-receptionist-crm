@@ -1,10 +1,11 @@
 "use client";
 
 import { Calendar } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { AppointmentStatusBadge } from "./appointment-status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/utils";
 import type { AppointmentListItem } from "@/lib/appointments-queries";
+import { Button } from "@/components/ui/button";
 
 interface AppointmentsTableProps {
   appointments: AppointmentListItem[];
@@ -25,42 +26,19 @@ export function AppointmentsTable({
 }: AppointmentsTableProps) {
   if (appointments.length === 0) {
     return (
-      <div
-        className="flex flex-col items-center gap-3 rounded-[var(--radius-lg)] py-20"
-        style={{
-          background: "var(--surface-raised)",
-          border: "1px solid var(--border)",
-        }}
-      >
-        <div
-          className="flex size-12 items-center justify-center rounded-[var(--radius-lg)]"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-        >
-          <Calendar className="size-5" style={{ color: "var(--text-muted)" }} />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-            No appointments found
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-            Adjust your filters or create a new appointment.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onCreateClick}>
-          New appointment
-        </Button>
-      </div>
+      <EmptyState
+        icon={Calendar}
+        heading="No appointments found"
+        subtext="Adjust your filters or create a new appointment."
+        action={{ label: "New appointment", onClick: onCreateClick }}
+      />
     );
   }
 
   return (
     <div
-      className="rounded-[var(--radius-lg)] overflow-hidden"
-      style={{
-        background: "var(--surface-raised)",
-        border: "1px solid var(--border)",
-        boxShadow: "var(--shadow-xs)",
-      }}
+      className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)]"
+      style={{ background: "var(--surface-raised)", boxShadow: "var(--shadow-sm)" }}
     >
       <div className="overflow-x-auto">
         <table className="data-table">
