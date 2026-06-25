@@ -1,4 +1,4 @@
-import { AppointmentStatus } from "@prisma/client";
+import type { AppointmentStatus } from "@/types/prisma-enums";
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; statusClass: string }> = {

@@ -1,3 +1,5 @@
+"use client";
+
 import { MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { timeAgo } from "@/lib/utils";

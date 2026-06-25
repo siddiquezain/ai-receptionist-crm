@@ -1,7 +1,7 @@
 "use client";
 
 import { Calendar, MessageSquare } from "lucide-react";
-import { AppointmentStatus, ConversationChannel } from "@prisma/client";
+import { AppointmentStatus, ConversationChannel } from "@/types/prisma-enums";
 import { timeAgo } from "@/lib/utils";
 import type {
   CustomerAppointmentItem,

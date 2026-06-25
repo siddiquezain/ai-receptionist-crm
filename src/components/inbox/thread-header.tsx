@@ -10,7 +10,7 @@ import {
   resolveConversation,
 } from "@/lib/actions/inbox";
 import type { ConversationDetail } from "@/lib/inbox-queries";
-import type { ConversationChannel } from "@prisma/client";
+import type { ConversationChannel } from "@/types/prisma-enums";
 
 const CHANNEL_LABEL: Record<ConversationChannel, string> = {
   WEB_CHAT: "Web Chat",

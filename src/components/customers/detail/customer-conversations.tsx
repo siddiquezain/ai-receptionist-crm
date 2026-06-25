@@ -1,5 +1,5 @@
 import { MessageSquare } from "lucide-react";
-import { ConversationChannel, ConversationStatus } from "@prisma/client";
+import { ConversationChannel, ConversationStatus } from "@/types/prisma-enums";
 import { timeAgo } from "@/lib/utils";
 import type { CustomerConversationItem } from "@/lib/customers-queries";
 
