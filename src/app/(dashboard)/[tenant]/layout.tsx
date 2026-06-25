@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { PageTransition } from "@/components/ui/page-transition";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -89,8 +90,8 @@ export default async function DashboardLayout({
         }}
         workspaces={workspaces}
       />
-      <main className="flex-1 overflow-y-auto min-w-0" style={{ background: "var(--bg)" }}>
-        {children}
+      <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--bg)]">
+        <PageTransition>{children}</PageTransition>
       </main>
     </div>
   );
