@@ -22,7 +22,6 @@ interface CustomerAppointmentsProps {
 export function CustomerAppointments({
   appointments,
   tenantSlug,
-  customerId: _customerId,
   timezone,
 }: CustomerAppointmentsProps) {
   return (

@@ -87,25 +87,31 @@ export function CommandPalette({ tenantId, tenantSlug }: CommandPaletteProps) {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [openPalette])
 
-  // Focus management
+  // Reset transient state when the palette closes (render-phase, not an effect)
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (!open) {
+      setQuery("")
+      setResults([])
+    }
+  }
+
+  // Focus management: capture on open, restore on close
   useEffect(() => {
     if (open) {
       previousFocusRef.current = document.activeElement as HTMLElement
     } else {
       previousFocusRef.current?.focus()
       previousFocusRef.current = null
-      setQuery("")
-      setResults([])
     }
   }, [open])
 
   // Debounced search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.length < 2) {
-      setResults([])
-      return
-    }
+    // Results are gated on query.length >= 2 at render, so no need to clear here.
+    if (query.length < 2) return
     if (cacheRef.current.has(query)) {
       setResults(cacheRef.current.get(query)!)
       return
@@ -162,7 +168,7 @@ export function CommandPalette({ tenantId, tenantSlug }: CommandPaletteProps) {
           )}
 
           {showEmpty && (
-            <CommandEmpty>No results for "{query}"</CommandEmpty>
+            <CommandEmpty>No results for &ldquo;{query}&rdquo;</CommandEmpty>
           )}
 
           {showResults &&

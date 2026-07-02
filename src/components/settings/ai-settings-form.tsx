@@ -132,7 +132,7 @@ export function AISettingsForm({ tenantId, settings, providerModels }: Props) {
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-[var(--text-primary)]">System Prompt</label>
           <p className="text-xs text-[var(--text-muted)]">
-            Instructions prepended to every conversation. Describe the AI's tone, business context, and any rules.
+            Instructions prepended to every conversation. Describe the AI&apos;s tone, business context, and any rules.
           </p>
           <textarea
             name="systemPrompt"

@@ -65,12 +65,14 @@ export function InboxClient({
   const [takingOver, setTakingOver] = useState(false);
   const [filter, setFilter] = useState<ConversationFilterState>(DEFAULT_FILTER_STATE);
 
-  // Sync props → state on server re-render (conversation switch)
-  useEffect(() => {
+  // Sync props → state on conversation switch (render-phase, not an effect)
+  const [prevConversationId, setPrevConversationId] = useState(selectedConversationId);
+  if (selectedConversationId !== prevConversationId) {
+    setPrevConversationId(selectedConversationId);
     setMessages(initialMessages);
     setSelectedConversation(initialSelectedConversation);
     setDismissedDraftId(null);
-  }, [selectedConversationId]);
+  }
 
   // ── Realtime: new messages in selected conversation ──────────────────────────
   useEffect(() => {

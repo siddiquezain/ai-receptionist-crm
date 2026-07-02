@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { User, Calendar } from "lucide-react";
-import { formatDate, timeAgo } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { AppointmentStatusBadge } from "@/components/appointments/appointment-status-badge";
 import type { CustomerSnapshot } from "@/lib/inbox-queries";
 
