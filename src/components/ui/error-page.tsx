@@ -39,8 +39,8 @@ export function ErrorPage({
         <Button size="sm" onClick={reset}>
           Try again
         </Button>
-        <Button size="sm" variant="ghost" asChild>
-          <Link href={backHref ?? "/"}>{backLabel}</Link>
+        <Button size="sm" variant="ghost" render={<Link href={backHref ?? "/"} />}>
+          {backLabel}
         </Button>
       </div>
     </div>

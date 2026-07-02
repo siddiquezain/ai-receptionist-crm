@@ -28,7 +28,8 @@ export function SortDropdown<T extends string>({
   const currentSort = (searchParams.get("sort") as T) ?? defaultSort
 
   const handleChange = useCallback(
-    (value: T) => {
+    (value: T | null) => {
+      if (value === null) return
       const params = new URLSearchParams(searchParams.toString())
       params.set("sort", value)
       params.delete("dir")
