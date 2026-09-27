@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
 
   const { action, tenantId, payload } = parsed.data;
 
-  // Phase 4A: skeleton — log and acknowledge
   console.log("[webhook/n8n]", { action, tenantId, keys: Object.keys(payload) });
 
   return NextResponse.json({ ok: true });

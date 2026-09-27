@@ -58,10 +58,7 @@ export function StatCard({ label, value, delta, deltaLabel, sparkline }: StatCar
       </div>
 
       {/* Value */}
-      <p
-        className="mt-3 font-mono tabular-nums font-semibold"
-        style={{ fontSize: "26px", color: "var(--text-primary)", letterSpacing: "-0.02em" }}
-      >
+      <p className="display mt-3 font-mono tabular-nums text-[var(--text-primary)]">
         {value}
       </p>
 

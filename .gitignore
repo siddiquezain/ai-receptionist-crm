@@ -24,6 +24,17 @@
 .DS_Store
 *.pem
 
+# dev logs
+dev-server*.log
+
+# local AI tooling artifacts
+.claude/
+.clone/
+graphify-out/
+
+# internal planning docs (superpowers)
+docs/superpowers/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

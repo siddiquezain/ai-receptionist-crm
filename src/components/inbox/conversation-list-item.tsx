@@ -1,6 +1,6 @@
 import { timeAgo } from "@/lib/utils";
 import type { ConversationListItem } from "@/lib/inbox-queries";
-import type { ConversationStatus } from "@prisma/client";
+import type { ConversationStatus } from "@/types/prisma-enums";
 
 const STATUS_DOT: Record<ConversationStatus, string> = {
   OPEN:      "var(--success)",

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Loader2, X } from "lucide-react";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus } from "@/types/prisma-enums";
 import {
   Sheet,
   SheetContent,

@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus } from "@/types/prisma-enums";
 import { Input } from "@/components/ui/input";
 import {
   Select,
