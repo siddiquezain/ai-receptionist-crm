@@ -295,7 +295,7 @@ src/
 │   │   ├── internal/        # Endpoints called by n8n (auth-gated, not user-facing)
 │   │   └── webhooks/n8n/    # HMAC-verified webhook receiver
 │   └── book/[tenant-slug]/  # Public self-service booking (Phase 4)
-├── components/              # Feature components co-located with pages
+├── components/              # Feature components organized by domain (appointments, inbox, etc.)
 ├── lib/
 │   ├── actions/             # Server Actions (all mutations go through here)
 │   ├── ai/                  # Provider abstraction + BYOK + pricing
